@@ -81,7 +81,7 @@ def migrar_banco(cursor):
     except sqlite3.OperationalError: pass
 
 def init_db():
-    db_path = get_resource_path('unip_sistema_v84_fix_layout.db') 
+    db_path = get_resource_path('unip_sistema_v86_multiwindow.db') 
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute("CREATE TABLE IF NOT EXISTS reservas (numero_linha INTEGER, periodo TEXT, professor TEXT, curso TEXT, bloco TEXT, horario_real TEXT, responsavel TEXT, responsavel_auditorio TEXT, contabilizada INTEGER DEFAULT 0, PRIMARY KEY (numero_linha, periodo))")
@@ -102,7 +102,7 @@ def init_db():
 
 # --- VALIDATIONS ---
 def verificar_conflito(num, periodo_novo):
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     cursor = conn.cursor()
     msg_turno = "MANHÃ" if periodo_novo in ['M1', 'M2'] else "NOITE"
     cursor.execute("SELECT professor FROM reservas WHERE numero_linha = ? AND periodo = ?", (num, periodo_novo))
@@ -112,54 +112,54 @@ def verificar_conflito(num, periodo_novo):
 
 # --- CRUD ---
 def salvar_reserva(num, periodo, prof, curso, bloco, h_real, resp, resp_aud):
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     conn.execute("INSERT OR REPLACE INTO reservas (numero_linha, periodo, professor, curso, bloco, horario_real, responsavel, responsavel_auditorio, contabilizada) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)", (num, periodo, prof, curso, bloco, h_real, resp, resp_aud))
     conn.commit(); conn.close()
 
 def carregar_reservas():
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     res = conn.execute("SELECT * FROM reservas ORDER BY numero_linha").fetchall()
     conn.close(); return res
 
 def get_equipe_completa():
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     res = conn.execute("SELECT nome, carga_acumulada, disponivel, especialidade FROM equipe ORDER BY nome ASC").fetchall()
     conn.close(); return res
 
 def adicionar_membro_equipe(nome, especialidade="GERAL"):
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     try: conn.execute("INSERT INTO equipe (nome, carga_acumulada, disponivel, especialidade) VALUES (?, 0, 1, ?)", (nome.upper(), especialidade)); conn.commit(); return True
     except: return False
     finally: conn.close()
 
 def remover_membro_equipe(nome):
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     conn.execute("DELETE FROM equipe WHERE nome = ?", (nome,)); conn.commit(); conn.close()
 
 def get_todas_salas():
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     res = conn.execute("SELECT curso_semestre, localizacao FROM salas_turmas ORDER BY curso_semestre ASC").fetchall(); conn.close(); return res
 
 def salvar_sala_manual(curso, local):
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     conn.execute("INSERT OR REPLACE INTO salas_turmas (curso_semestre, localizacao) VALUES (?, ?)", (curso, local)); conn.commit(); conn.close()
 
 def remover_sala_manual(curso):
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     conn.execute("DELETE FROM salas_turmas WHERE curso_semestre = ?", (curso,)); conn.commit(); conn.close()
 
 def buscar_local_por_curso(curso):
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     res = conn.execute("SELECT localizacao FROM salas_turmas WHERE curso_semestre = ?", (curso,)).fetchone(); conn.close()
     return res[0] if res else None
 
 def toggle_disponibilidade(nome, status_atual):
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     novo = 0 if status_atual == 1 else 1
     conn.execute("UPDATE equipe SET disponivel = ? WHERE nome = ?", (novo, nome)); conn.commit(); conn.close()
 
 def atualizar_carga_segura(nome, num_linha, periodo):
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     cursor = conn.cursor()
     cursor.execute("SELECT contabilizada FROM reservas WHERE numero_linha = ? AND periodo = ?", (num_linha, periodo))
     res = cursor.fetchone()
@@ -199,7 +199,7 @@ def calcular_penalidade_distancia(bloco_novo, blocos_existentes):
     return menor_penalidade
 
 def escolher_responsavel_inteligente(bloco_alvo):
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     equipe = conn.execute("SELECT nome, carga_acumulada, especialidade FROM equipe WHERE disponivel = 1").fetchall()
     if not equipe: conn.close(); return "SEM EQUIPE"
     reservas_hoje = conn.execute("SELECT responsavel, bloco FROM reservas").fetchall()
@@ -226,7 +226,7 @@ def escolher_responsavel_inteligente(bloco_alvo):
     return candidatos[0][0]
 
 def verificar_novo_dia_e_limpar():
-    conn = sqlite3.connect(get_resource_path('unip_sistema_v84_fix_layout.db'))
+    conn = sqlite3.connect(get_resource_path('unip_sistema_v86_multiwindow.db'))
     cursor = conn.cursor()
     hoje = datetime.now().strftime("%d/%m/%Y")
     res = cursor.execute("SELECT valor FROM config WHERE chave='data_ultimo_uso'").fetchone()
@@ -298,43 +298,45 @@ def gerar_relatorio_pdf(data_cabecalho, mes_referencia, ano_referencia):
         messagebox.showinfo("Sucesso", "PDF Gerado (Ordenado por Bloco)!")
     except Exception as e: messagebox.showerror("Erro PDF", str(e))
 
-# --- INTERFACE ---
-class App(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        self.title("Sistema UNIP - Gestão Centralizada (v8.4 Final Fixed)")
-        self.geometry("700x600") 
-        init_db()
-        self.after(100, verificar_novo_dia_e_limpar)
+# --- CLASSE DO SISTEMA (AGORA REUTILIZÁVEL) ---
+class SistemaUnip:
+    def __init__(self, root_window):
+        self.root = root_window
+        self.root.title("Sistema UNIP - Gestão Centralizada (v8.6 Multi-Window)")
+        self.root.geometry("700x600")
+        
+        # Só verifica limpeza na janela principal para não perguntar toda hora
+        if isinstance(self.root, tk.Tk):
+            self.root.after(100, verificar_novo_dia_e_limpar)
 
-        self.frm_nav = tk.Frame(self, bg="#f0f0f0", height=50); self.frm_nav.pack(side="top", fill="x")
+        self.frm_nav = tk.Frame(self.root, bg="#f0f0f0", height=50); self.frm_nav.pack(side="top", fill="x")
         self.frm_nav_center = tk.Frame(self.frm_nav, bg="#f0f0f0"); self.frm_nav_center.pack(pady=10)
         
         btn_style = {"font": ("Arial", 10, "bold"), "relief": "raised", "bd": 2, "width": 18, "pady": 5}
 
-        # --- BOTAO NOVA PAGINA ADICIONADO PRIMEIRO PARA FICAR NA ESQUERDA ---
-        self.btn_nova_pagina = tk.Button(self.frm_nav_center, text="Nova Página", command=self.ao_clicar_nova_pagina, **btn_style)
+        # --- BOTAO NOVA JANELA (ABRE NOVA JANELA) ---
+        self.btn_nova_pagina = tk.Button(self.frm_nav_center, text="Nova Janela", command=self.abrir_nova_janela, **btn_style)
         self.btn_nova_pagina.pack(side="left", padx=5)
 
-        self.btn_reserva = tk.Button(self.frm_nav_center, text="Lançamento de Reservas", command=lambda: self.show_tab("reserva"), **btn_style); self.btn_reserva.pack(side="left", padx=5)
+        self.btn_reserva = tk.Button(self.frm_nav_center, text="Reservas", command=lambda: self.show_tab("reserva"), **btn_style); self.btn_reserva.pack(side="left", padx=5)
         self.btn_equipe = tk.Button(self.frm_nav_center, text="Equipe", command=lambda: self.show_tab("equipe"), **btn_style); self.btn_equipe.pack(side="left", padx=5)
         self.btn_salas = tk.Button(self.frm_nav_center, text="Gestão de Salas", command=lambda: self.show_tab("salas"), **btn_style); self.btn_salas.pack(side="left", padx=5)
 
-        self.container = tk.Frame(self); self.container.pack(fill="both", expand=True)
+        self.container = tk.Frame(self.root); self.container.pack(fill="both", expand=True)
         self.container.grid_rowconfigure(0, weight=1); self.container.grid_columnconfigure(0, weight=1)
         self.tab_reserva = tk.Frame(self.container); self.tab_equipe = tk.Frame(self.container); self.tab_salas = tk.Frame(self.container)
         for f in (self.tab_reserva, self.tab_equipe, self.tab_salas): f.grid(row=0, column=0, sticky="nsew")
 
         self.setup_reserva_tab(); self.setup_equipe_tab(); self.setup_salas_tab(); self.show_tab("reserva")
 
-    def ao_clicar_nova_pagina(self):
-        messagebox.showinfo("Nova Página", "Funcionalidade em desenvolvimento.")
+    def abrir_nova_janela(self):
+        new_window = tk.Toplevel(self.root)
+        app_copy = SistemaUnip(new_window)
 
     def show_tab(self, name):
         active_bg = "#4CAF50"; active_fg = "white"; inactive_bg = "#e1e1e1"; inactive_fg = "black"
         self.btn_nova_pagina.config(bg=inactive_bg, fg=inactive_fg)
         self.btn_reserva.config(bg=inactive_bg, fg=inactive_fg); self.btn_equipe.config(bg=inactive_bg, fg=inactive_fg); self.btn_salas.config(bg=inactive_bg, fg=inactive_fg)
-        
         if name == "reserva": self.tab_reserva.tkraise(); self.btn_reserva.config(bg=active_bg, fg=active_fg)
         elif name == "equipe": self.tab_equipe.tkraise(); self.btn_equipe.config(bg=active_bg, fg=active_fg)
         elif name == "salas": self.tab_salas.tkraise(); self.btn_salas.config(bg=active_bg, fg=active_fg)
@@ -389,7 +391,6 @@ class App(tk.Tk):
     def on_entry_focus_out(self, entry):
         if entry.get() == "": entry.insert(0, self.placeholder_text); entry.config(fg='grey')
 
-    # --- EQUIPE TAB (CORRIGIDA: COLUNAS AJUSTADAS) ---
     def setup_equipe_tab(self):
         frame = self.tab_equipe
         frame.columnconfigure(0, weight=1); frame.rowconfigure(1, weight=1)
@@ -414,9 +415,7 @@ class App(tk.Tk):
         tk.Button(frame_top, text="Pesquisar", bg="#2196F3", fg="white", command=self.filtrar_equipe).grid(row=0, column=6, padx=5, sticky="e")
 
         self.lista_eq = ttk.Treeview(frame, columns=("Nome", "Carga", "Status", "Especialidade"), show="headings", height=12)
-        
-        # --- AJUSTE DAS COLUNAS PARA CABER EM 700PX ---
-        # Total Width precisa ser < 650 para não sumir
+        # Ajuste de largura para 700px
         self.lista_eq.column("Nome", width=180, anchor="center", stretch=True)
         self.lista_eq.column("Carga", width=80, anchor="center", stretch=True)
         self.lista_eq.column("Status", width=120, anchor="center", stretch=True)
@@ -453,7 +452,6 @@ class App(tk.Tk):
         if self.lista_eq.selection():
             if messagebox.askyesno("Confirmar", f"Remover {self.lista_eq.item(self.lista_eq.selection()[0])['values'][0]}?"): remover_membro_equipe(self.lista_eq.item(self.lista_eq.selection()[0])['values'][0]); self.atualizar_lista_equipe()
 
-    # --- SALAS TAB ---
     def setup_salas_tab(self):
         frame = self.tab_salas
         frame.columnconfigure(0, weight=1); frame.rowconfigure(1, weight=1)
@@ -547,5 +545,7 @@ class App(tk.Tk):
         except: messagebox.showerror("Erro", "Linha inválida (1-20)")
 
 if __name__ == "__main__":
-    app = App()
-    app.mainloop()
+    init_db() # Garante banco criado
+    root = tk.Tk()
+    app = SistemaUnip(root)
+    root.mainloop()
