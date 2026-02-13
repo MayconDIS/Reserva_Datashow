@@ -1,64 +1,67 @@
 """
 SISTEMA DATA SHOW
-Versão: 11.32 (Tabelas Editáveis com Clique Duplo)
-Autor: Refatorado por IA (Gemini) / Created by DevMaycon
+Versão: 11.38 (Refatorado para Estudo e Boas Práticas)
+Autor: DevMaycon / Refatorado por IA (Gemini)
+
+Este código segue a PEP 8 (Guia de Estilo Python) para maximizar a legibilidade.
 """
 
 import sys
 import os
 import sqlite3
-import tkinter as tk
-from tkinter import ttk, messagebox
-import customtkinter as ctk
-import unicodedata
-from datetime import datetime
 import locale
 import re
+import unicodedata
+from datetime import datetime
+import tkinter as tk
+from tkinter import ttk, messagebox
 
-# --- TRATAMENTO DE DEPENDÊNCIAS EXTERNAS ---
+# Bibliotecas de Terceiros
 try:
+    import customtkinter as ctk
     from PIL import Image as PILImage, ImageTk
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import inch, mm
+    from reportlab.lib.units import mm, inch
 except ImportError as e:
-    messagebox.showerror("Erro", f"Instale: pip install Pillow reportlab customtkinter packaging")
+    messagebox.showerror("Erro de Dependência", f"Biblioteca faltando. Instale: pip install Pillow reportlab customtkinter packaging")
     sys.exit()
 
-# --- CONFIGURAÇÃO INICIAL ---
+# --- CONFIGURAÇÃO INICIAL DO APP ---
 ctk.deactivate_automatic_dpi_awareness()
-ctk.set_appearance_mode("System") 
-ctk.set_default_color_theme("green") 
+ctk.set_appearance_mode("Dark")
+ctk.set_default_color_theme("green")
 
-# --- CONSTANTES VISUAIS ---
-COR_SALVAR = "#4CAF50"    # Verde
-COR_PDF = "#2196F3"       # Azul
-COR_ALERTA = "#FF9800"    # Laranja
-COR_PERIGO = "#F44336"    # Vermelho
-COR_NEUTRO = "#444444"    # Cinza para botões inativos
-COR_SELECIONADO = "#1f6aa5" # Azul padrão do tema para seleção
-COR_PLACEHOLDER = "gray50"  
-COR_TEXTO_PADRAO = ("black", "white") 
-COR_ESTRELA_ATIVA = "#FFD700" # Amarelo Ouro
-COR_ESTRELA_INATIVA = "#555555" # Cinza Escuro
+# --- CONSTANTES GLOBAIS (Configurações Visuais) ---
+COR_SUCESSO = "#4CAF50"      # Verde
+COR_PDF = "#2196F3"          # Azul
+COR_ALERTA = "#FF9800"       # Laranja
+COR_ERRO = "#F44336"         # Vermelho
+COR_NEUTRO = "#444444"       # Cinza Escuro
+COR_DESTAQUE = "#1f6aa5"     # Azul padrão
+COR_TEXTO_PADRAO = ("black", "white")
+COR_PLACEHOLDER = "gray50"
 
-DB_NOME = 'sistema_datashow_v11_ctk.db'
+# Cores do Botão de Tema
+COR_BTN_DARK = "#6A1B9A"     # Roxo
+COR_BTN_LIGHT = "#FFD700"    # Amarelo
 
-TAMANHO_JANELA = "800x590"  
-TITULO_JANELA = "Sistema Data Show (v11.32 - Editável)"
+DB_NOME = 'sistema_datashow_v11.db'
+TITULO_JANELA = "Sistema Data Show (v11.38 - Clean Code)"
+TAMANHO_JANELA = "800x600"
 
-# Dados Iniciais (Mantidos)
-EQUIPE_PADRAO = [
-    ("RAFAEL", "GERAL"), ("GABRIEL", "GERAL"), 
-    ("DAVID", "GERAL"), ("FERNANDO", "GERAL"), 
+# Dados Padrão para Inicialização
+EQUIPE_INICIAL = [
+    ("RAFAEL", "GERAL"), ("GABRIEL", "GERAL"),
+    ("DAVID", "GERAL"), ("FERNANDO", "GERAL"),
     ("MONTEIRO", "GERAL"), ("MAYCON", "GERAL"),
-    ("RYAN", "GERAL"), ("JONATHAN", "AUDITÓRIO"), 
+    ("RYAN", "GERAL"), ("JONATHAN", "AUDITÓRIO"),
     ("LUCAS", "LÍDER"), ("EDUARDO", "LÍDER"),
 ]
 
-SALAS_PADRAO = [
+SALAS_INICIAIS = [
     ("ADS 2º/3º A", "H - 2º - Sala 02", "MANHÃ"),
     ("CIÊN. COMP 2º/3º A", "H - 2º - Sala 04", "MANHÃ"),
     ("DIREITO 1º A", "F - 1º - Sala 04", "MANHÃ"),
@@ -71,80 +74,164 @@ SALAS_PADRAO = [
     ("DIREITO 1º", "E - 1º - Sala 01", "NOITE")
 ]
 
-try: locale.setlocale(locale.LC_ALL, 'pt_BR.utf8')
+# Configuração de Localização (Data e Hora em PT-BR)
+try:
+    locale.setlocale(locale.LC_ALL, 'pt_BR.utf8')
 except:
-    try: locale.setlocale(locale.LC_ALL, 'Portuguese_Brazil')
-    except: pass
+    try:
+        locale.setlocale(locale.LC_ALL, 'Portuguese_Brazil')
+    except:
+        pass
 
-# --- UTILITÁRIOS ---
+
+# =============================================================================
+# CAMADA DE UTILITÁRIOS
+# =============================================================================
 class Utils:
+    """Funções auxiliares estáticas para manipulação de arquivos e texto."""
+
+    @staticmethod
+    def obter_pasta_base():
+        """Retorna o diretório onde o executável ou script está rodando."""
+        if getattr(sys, 'frozen', False):
+            # Se estiver rodando como .exe (PyInstaller)
+            return os.path.dirname(sys.executable)
+        return os.path.dirname(os.path.abspath(__file__))
+
     @staticmethod
     def obter_caminho_recurso(nome_arquivo):
-        try: base_path = sys._MEIPASS
+        """Retorna o caminho de arquivos internos (como imagens empacotadas)."""
+        try:
+            base_path = sys._MEIPASS  # Pasta temporária do PyInstaller
         except Exception:
-            try: base_path = os.path.dirname(os.path.abspath(__file__))
-            except: base_path = os.path.abspath(".")
+            base_path = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(base_path, nome_arquivo)
 
     @staticmethod
-    def remover_acentos(texto):
-        if not texto: return ""
-        return ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn').upper()
+    def garantir_pastas_existem():
+        """Cria as pastas necessárias (Relatorios, Feedbacks) se não existirem."""
+        base = Utils.obter_pasta_base()
+        pastas = ["Relatorios", "Feedbacks"]
+        for pasta in pastas:
+            caminho_completo = os.path.join(base, pasta)
+            if not os.path.exists(caminho_completo):
+                os.makedirs(caminho_completo)
 
     @staticmethod
-    def extrair_info_bloco(texto_bloco):
-        if not texto_bloco: return "", ""
+    def remover_acentos(texto: str) -> str:
+        """Remove acentos e converte para maiúsculas (ex: 'São Paulo' -> 'SAO PAULO')."""
+        if not texto:
+            return ""
+        nfkd = unicodedata.normalize('NFD', texto)
+        return "".join([c for c in nfkd if not unicodedata.combining(c)]).upper()
+
+    @staticmethod
+    def extrair_info_bloco(texto_bloco: str):
+        """Tenta extrair a Letra do Bloco e o Andar de uma string."""
+        if not texto_bloco:
+            return "", ""
+        
         texto = texto_bloco.upper()
         letra = ""
+        
+        # Procura padrão como "A - " ou "B -"
         match_letra = re.search(r'([A-Z])\s*-', texto)
-        if match_letra: letra = match_letra.group(1)
+        if match_letra:
+            letra = match_letra.group(1)
+            
         andar = ""
         if "SUBSOLO" in texto: andar = "SUBSOLO"
         elif "TERREO" in texto: andar = "TERREO"
         elif "1º" in texto or "1°" in texto or "- 1 -" in texto: andar = "1"
         elif "2º" in texto or "2°" in texto or "- 2 -" in texto: andar = "2"
+        
         return letra, andar
 
     @staticmethod
     def calcular_penalidade_distancia(bloco_novo, blocos_existentes):
-        if not blocos_existentes: return 0 
+        """Calcula quão longe o funcionário terá que andar (lógica heurística)."""
+        if not blocos_existentes:
+            return 0
+            
         letra_nova, andar_novo = Utils.extrair_info_bloco(bloco_novo)
         menor_penalidade = 100
-        for b_existente in blocos_existentes:
-            letra_exist, andar_exist = Utils.extrair_info_bloco(b_existente)
+        
+        for bloco_existente in blocos_existentes:
+            letra_exist, andar_exist = Utils.extrair_info_bloco(bloco_existente)
             penalidade = 100
+            
             if letra_nova == letra_exist:
-                if andar_novo == andar_exist: penalidade = 0 
-                else: penalidade = 2 
-            else: penalidade = 10 
-            if penalidade < menor_penalidade: menor_penalidade = penalidade
+                if andar_novo == andar_exist:
+                    penalidade = 0  # Mesmo andar e bloco (perfeito)
+                else:
+                    penalidade = 2  # Mesmo bloco, andar diferente
+            else:
+                penalidade = 10     # Bloco diferente (longe)
+            
+            if penalidade < menor_penalidade:
+                menor_penalidade = penalidade
+                
         return menor_penalidade
 
-# --- BANCO DE DADOS ---
+
+# =============================================================================
+# CAMADA DE DADOS (DATABASE)
+# =============================================================================
 class BancoDeDados:
+    """Gerencia a conexão e operações com o banco SQLite."""
+    
     def __init__(self):
-        self.caminho_db = Utils.obter_caminho_recurso(DB_NOME)
+        self.caminho_db = os.path.join(Utils.obter_pasta_base(), DB_NOME)
         self._inicializar_tabelas()
 
     def _conectar(self):
         return sqlite3.connect(self.caminho_db)
 
     def _inicializar_tabelas(self):
+        """Cria as tabelas se não existirem e insere dados padrão."""
         conn = self._conectar()
         cursor = conn.cursor()
         
+        # Tabela de Reservas
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS reservas (
-                numero_linha INTEGER, periodo TEXT, professor TEXT, curso TEXT, 
-                bloco TEXT, horario_real TEXT, responsavel TEXT, 
-                responsavel_auditorio TEXT, contabilizada INTEGER DEFAULT 0, 
+                numero_linha INTEGER,
+                periodo TEXT,
+                professor TEXT,
+                curso TEXT, 
+                bloco TEXT,
+                horario_real TEXT,
+                responsavel TEXT, 
+                responsavel_auditorio TEXT,
+                contabilizada INTEGER DEFAULT 0, 
                 PRIMARY KEY (numero_linha, periodo)
             )
         """)
-        cursor.execute("CREATE TABLE IF NOT EXISTS equipe (nome TEXT PRIMARY KEY, carga_acumulada INTEGER DEFAULT 0, disponivel INTEGER DEFAULT 1, especialidade TEXT DEFAULT 'GERAL')")
-        cursor.execute("CREATE TABLE IF NOT EXISTS salas_turmas (id INTEGER PRIMARY KEY AUTOINCREMENT, curso_semestre TEXT UNIQUE, localizacao TEXT, turno TEXT)")
+        
+        # Tabela de Equipe
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS equipe (
+                nome TEXT PRIMARY KEY,
+                carga_acumulada INTEGER DEFAULT 0,
+                disponivel INTEGER DEFAULT 1,
+                especialidade TEXT DEFAULT 'GERAL'
+            )
+        """)
+        
+        # Tabela de Salas
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS salas_turmas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                curso_semestre TEXT UNIQUE,
+                localizacao TEXT,
+                turno TEXT
+            )
+        """)
+        
+        # Tabela de Configurações
         cursor.execute("CREATE TABLE IF NOT EXISTS config (chave TEXT PRIMARY KEY, valor TEXT)")
         
+        # Tabela de Feedbacks
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS feedbacks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -156,6 +243,7 @@ class BancoDeDados:
             )
         """)
         
+        # Migrações (Garante compatibilidade com versões antigas do DB)
         try: cursor.execute("ALTER TABLE reservas ADD COLUMN contabilizada INTEGER DEFAULT 0")
         except: pass
         try: cursor.execute("ALTER TABLE equipe ADD COLUMN especialidade TEXT DEFAULT 'GERAL'")
@@ -165,28 +253,25 @@ class BancoDeDados:
             cursor.execute("UPDATE salas_turmas SET turno = 'NOITE' WHERE turno IS NULL") 
         except: pass
 
+        # Inserção de Dados Padrão (Seed)
         cursor.execute("SELECT count(*) FROM equipe")
         if cursor.fetchone()[0] == 0:
-            for nome, esp in EQUIPE_PADRAO:
+            for nome, esp in EQUIPE_INICIAL:
                 try: cursor.execute("INSERT INTO equipe (nome, carga_acumulada, disponivel, especialidade) VALUES (?, 0, 1, ?)", (nome, esp))
                 except: pass
         
         cursor.execute("SELECT count(*) FROM salas_turmas")
         if cursor.fetchone()[0] == 0:
-            cursor.executemany("INSERT INTO salas_turmas (curso_semestre, localizacao, turno) VALUES (?, ?, ?)", SALAS_PADRAO)
+            cursor.executemany("INSERT INTO salas_turmas (curso_semestre, localizacao, turno) VALUES (?, ?, ?)", SALAS_INICIAIS)
             
         conn.commit()
         conn.close()
 
-    # ... [MÉTODOS EXISTENTES MANTIDOS] ...
-    def buscar_conflito_reserva(self, linha, periodo):
+    # --- Operações de Leitura e Escrita ---
+
+    def listar_todas_reservas(self):
         with self._conectar() as conn:
-            res = conn.execute("SELECT professor FROM reservas WHERE numero_linha = ? AND periodo = ?", (linha, periodo)).fetchone()
-        return res[0] if res else None
-    
-    def listar_linhas_ocupadas(self, periodo):
-        with self._conectar() as conn:
-            return conn.execute("SELECT numero_linha FROM reservas WHERE periodo = ?", (periodo,)).fetchall()
+            return conn.execute("SELECT * FROM reservas ORDER BY numero_linha").fetchall()
 
     def salvar_reserva(self, dados):
         with self._conectar() as conn:
@@ -196,17 +281,14 @@ class BancoDeDados:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
             """, dados)
 
-    def salvar_feedback(self, nota, comentario, nome, email):
+    def buscar_conflito_reserva(self, linha, periodo):
         with self._conectar() as conn:
-            data_atual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            conn.execute("""
-                INSERT INTO feedbacks (nota, comentario, nome_usuario, email_usuario, data_envio)
-                VALUES (?, ?, ?, ?, ?)
-            """, (nota, comentario, nome, email, data_atual))
+            res = conn.execute("SELECT professor FROM reservas WHERE numero_linha = ? AND periodo = ?", (linha, periodo)).fetchone()
+        return res[0] if res else None
 
-    def listar_todas_reservas(self):
+    def listar_linhas_ocupadas(self, periodo):
         with self._conectar() as conn:
-            return conn.execute("SELECT * FROM reservas ORDER BY numero_linha").fetchall()
+            return conn.execute("SELECT numero_linha FROM reservas WHERE periodo = ?", (periodo,)).fetchall()
 
     def limpar_todas_reservas(self):
         with self._conectar() as conn:
@@ -221,7 +303,8 @@ class BancoDeDados:
             with self._conectar() as conn:
                 conn.execute("INSERT INTO equipe (nome, carga_acumulada, disponivel, especialidade) VALUES (?, 0, 1, ?)", (nome.upper(), especialidade))
             return True
-        except: return False
+        except:
+            return False
 
     def remover_membro(self, nome):
         with self._conectar() as conn:
@@ -232,7 +315,22 @@ class BancoDeDados:
         with self._conectar() as conn:
             conn.execute("UPDATE equipe SET disponivel = ? WHERE nome = ?", (novo_status, nome))
 
+    def atualizar_campo_equipe(self, nome_antigo, novo_valor, campo):
+        """Atualiza uma célula específica da tabela equipe."""
+        with self._conectar() as conn:
+            if campo == "Nome":
+                try:
+                    conn.execute("UPDATE equipe SET nome = ? WHERE nome = ?", (novo_valor.upper(), nome_antigo))
+                    return True
+                except sqlite3.IntegrityError:
+                    return False
+            elif campo == "Especialidade":
+                conn.execute("UPDATE equipe SET especialidade = ? WHERE nome = ?", (novo_valor, nome_antigo))
+                return True
+        return False
+
     def incrementar_carga(self, nome, linha, periodo):
+        """Aumenta a contagem de atendimentos do bedel (apenas uma vez por reserva)."""
         sucesso = False
         conn = self._conectar()
         try:
@@ -265,33 +363,6 @@ class BancoDeDados:
             res = conn.execute("SELECT localizacao FROM salas_turmas WHERE curso_semestre = ?", (curso,)).fetchone()
         return res[0] if res else None
 
-    def obter_config(self, chave):
-        with self._conectar() as conn:
-            res = conn.execute("SELECT valor FROM config WHERE chave = ?", (chave,)).fetchone()
-        return res[0] if res else None
-
-    def salvar_config(self, chave, valor):
-        with self._conectar() as conn:
-            conn.execute("INSERT OR REPLACE INTO config (chave, valor) VALUES (?, ?)", (chave, valor))
-
-    # --- NOVOS MÉTODOS PARA EDIÇÃO DIRETA ---
-    def atualizar_campo_equipe(self, nome_antigo, novo_valor, campo):
-        """Atualiza nome ou especialidade de um membro"""
-        with self._conectar() as conn:
-            if campo == "Nome":
-                # Se mudar o nome, precisa atualizar a chave primária (cuidado com constraints)
-                # Como SQLite não suporta alteração fácil de PK com FKs, vamos simplificar:
-                # O ideal seria deletar e criar novo, mas para manter o histórico, faremos UPDATE
-                try:
-                    conn.execute("UPDATE equipe SET nome = ? WHERE nome = ?", (novo_valor.upper(), nome_antigo))
-                    return True
-                except sqlite3.IntegrityError:
-                    return False # Nome já existe
-            elif campo == "Especialidade":
-                conn.execute("UPDATE equipe SET especialidade = ? WHERE nome = ?", (novo_valor, nome_antigo))
-                return True
-        return False
-
     def atualizar_campo_sala(self, curso_antigo, novo_valor, campo):
         with self._conectar() as conn:
             try:
@@ -305,20 +376,57 @@ class BancoDeDados:
             except:
                 return False
 
-# --- LÓGICA DE NEGÓCIO (BedelService e RelatorioService mantidos iguais) ---
+    def obter_config(self, chave):
+        with self._conectar() as conn:
+            res = conn.execute("SELECT valor FROM config WHERE chave = ?", (chave,)).fetchone()
+        return res[0] if res else None
+
+    def salvar_config(self, chave, valor):
+        with self._conectar() as conn:
+            conn.execute("INSERT OR REPLACE INTO config (chave, valor) VALUES (?, ?)", (chave, valor))
+
+    def salvar_feedback(self, nota, comentario, nome, email):
+        with self._conectar() as conn:
+            data_atual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            conn.execute("""
+                INSERT INTO feedbacks (nota, comentario, nome_usuario, email_usuario, data_envio)
+                VALUES (?, ?, ?, ?, ?)
+            """, (nota, comentario, nome, email, data_atual))
+        
+        # Salva também um arquivo .txt como backup
+        try:
+            pasta_fb = os.path.join(Utils.obter_pasta_base(), "Feedbacks")
+            nome_arquivo = f"Feedback_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            caminho_arquivo = os.path.join(pasta_fb, nome_arquivo)
+            with open(caminho_arquivo, "w", encoding="utf-8") as f:
+                f.write(f"Data: {data_atual}\nNota: {nota}\nNome: {nome}\nEmail: {email}\n{'-'*20}\n{comentario}\n")
+        except Exception as e:
+            print(f"Erro ao salvar txt feedback: {e}")
+
+
+# =============================================================================
+# CAMADA DE SERVIÇOS (LÓGICA DE NEGÓCIO)
+# =============================================================================
 class BedelService:
+    """Lógica para escolher qual funcionário deve atender uma reserva."""
+    
     def __init__(self, db: BancoDeDados):
         self.db = db
 
     def escolher_responsavel_inteligente(self, bloco_alvo):
         equipe = self.db.listar_equipe()
+        # Filtra apenas quem está disponível (index 2 == 1)
         equipe_disponivel = [m for m in equipe if m[2] == 1]
-        if not equipe_disponivel: return "SEM EQUIPE"
+        
+        if not equipe_disponivel:
+            return "SEM EQUIPE"
 
+        # Prepara dados para o algoritmo
         reservas_hoje = self.db.listar_todas_reservas()
         locais_responsavel = {m[0]: [] for m in equipe_disponivel}
         carga_atual = {m[0]: m[1] for m in equipe_disponivel}
 
+        # Mapeia onde cada um já está alocado hoje
         for r in reservas_hoje:
             resp = r[6]
             bloco = r[4]
@@ -331,43 +439,63 @@ class BedelService:
         bloco_norm = Utils.remover_acentos(bloco_alvo)
         eh_auditorio = "AUDITORIO" in bloco_norm
 
+        # Calcula pontuação para cada membro
         for nome, _, _, esp in equipe_disponivel:
-            if esp == "AUDITÓRIO": especialistas_auditorio.append(nome)
+            if esp == "AUDITÓRIO":
+                especialistas_auditorio.append(nome)
+            
+            # Penalidade baseada na distância física
             penalidade_dist = Utils.calcular_penalidade_distancia(bloco_alvo, locais_responsavel[nome])
+            
+            # A carga de trabalho tem peso 3 na decisão
             score = (carga_atual[nome] * 3) + penalidade_dist
             candidatos.append((nome, score))
 
+        # Se for auditório, prioriza especialistas
         if eh_auditorio and especialistas_auditorio:
-            melhor = sorted(especialistas_auditorio, key=lambda n: carga_atual[n])[0]
-            return melhor
+            # Pega o especialista com menor carga
+            return sorted(especialistas_auditorio, key=lambda n: carga_atual[n])[0]
 
+        # Caso geral: pega o candidato com menor score (menor carga + menor distância)
         candidatos.sort(key=lambda x: x[1])
         return candidatos[0][0]
 
+
 class RelatorioService:
+    """Gera o PDF usando ReportLab."""
+    
     def __init__(self, db: BancoDeDados):
         self.db = db
 
     def gerar_pdf(self, data_cabecalho, mes_referencia, ano_referencia):
         try:
-            try: mes_safe = mes_referencia.upper().split()[0]
-            except: mes_safe = "MES"
-            output_file = Utils.obter_caminho_recurso(f"Reserva_{mes_safe}_{ano_referencia}.pdf")
-            caminho_logo = Utils.obter_caminho_recurso("logo.png")
+            # Formata nome do arquivo
+            data_limpa = data_cabecalho.replace("/", "-")
+            dia_mes = data_limpa[:5]
+            nome_arquivo = f"Reserva_{dia_mes}.pdf"
+            output_file = os.path.join(os.path.join(Utils.obter_pasta_base(), "Relatorios"), nome_arquivo)
             
-            doc = SimpleDocTemplate(output_file, pagesize=landscape(A4), 
-                                    rightMargin=5*mm, leftMargin=5*mm, topMargin=5*mm, bottomMargin=5*mm)
+            # Configuração do Documento
+            doc = SimpleDocTemplate(
+                output_file, 
+                pagesize=landscape(A4), 
+                rightMargin=5*mm, leftMargin=5*mm, topMargin=5*mm, bottomMargin=5*mm
+            )
             elements = []
             
+            # Logo
+            caminho_logo = Utils.obter_caminho_recurso("logo.png")
             if os.path.exists(caminho_logo):
                 im = Image(caminho_logo, width=1.5*inch, height=0.4*inch)
-                im.hAlign = 'CENTER' 
+                im.hAlign = 'CENTER'
                 elements.append(im)
                 elements.append(Spacer(1, 1*mm))
             
+            # Título
             styles = getSampleStyleSheet()
             estilo_titulo = ParagraphStyle('TituloCenter', parent=styles['Normal'], fontSize=12, alignment=1)
             
+            # Busca Auditorio Reservado
             reservas = self.db.listar_todas_reservas()
             texto_auditorio = "_______________"
             for r in reservas:
@@ -379,17 +507,19 @@ class RelatorioService:
             elements.append(Paragraph(titulo, estilo_titulo))
             elements.append(Spacer(1, 3*mm))
             
+            # Prepara Dados da Tabela
             linhas_dict = {i: [] for i in range(1, 21)}
-            for r in reservas: linhas_dict[r[0]].append(r)
+            for r in reservas:
+                linhas_dict[r[0]].append(r)
             
             lista_ordenada = []
             for num in range(1, 21):
-                itens = linhas_dict[num]
-                lista_ordenada.append((num, itens))
+                lista_ordenada.append((num, linhas_dict[num]))
             
             headers = ['Nº', 'HORA', 'PROFESSOR', 'CURSO', 'BLOCO', 'HORÁRIO', 'SOM/MIC', 'RESPONSÁVEL', 'Montou x Desmontou']
             data_tabela = [headers]
             
+            # Estilo da Tabela
             tbl_style = [
                 ('GRID', (0,0), (-1,-1), 0.5, colors.black),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -397,21 +527,26 @@ class RelatorioService:
                 ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0,0), (-1,-1), 9),
                 ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-                ('TOPPADDING', (0,0), (-1,-1), 1.6), ('BOTTOMPADDING', (0,0), (-1,-1), 1.6),
-                ('LEFTPADDING', (0,0), (-1,-1), 1), ('RIGHTPADDING', (0,0), (-1,-1), 1),
-                ('LEADING', (0,0), (-1,-1), 9), 
+                ('TOPPADDING', (0,0), (-1,-1), 1.6),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 1.6),
+                ('LEFTPADDING', (0,0), (-1,-1), 1),
+                ('RIGHTPADDING', (0,0), (-1,-1), 1),
+                ('LEADING', (0,0), (-1,-1), 9),
             ]
             
             str_som = "SOM( ) MIC( )"
             str_montou = "Montou( ) Desmontou( )"
             row_idx = 1
             
+            # Popula Tabela
             for num_linha, itens_linha in lista_ordenada:
                 def extrair(periodo_key):
                     for item in itens_linha:
                         if item[1] == periodo_key:
                             resp = item[6] if item[6] else ""
-                            if resp.strip(): self.db.incrementar_carga(resp, item[0], item[1])
+                            # Se tem responsável, incrementa carga (efeito colateral na geração do PDF)
+                            if resp.strip():
+                                self.db.incrementar_carga(resp, item[0], item[1])
                             return [item[2], item[3], item[4], item[5], str_som, resp, str_montou]
                     return ["", "", "", "", str_som, "", str_montou]
 
@@ -424,64 +559,165 @@ class RelatorioService:
                 
                 data_tabela.append(linha1)
                 data_tabela.append(linha2)
+                
+                # Mescla célula da esquerda (Número da linha)
                 tbl_style.append(('SPAN', (0, row_idx), (0, row_idx+1)))
                 row_idx += 2
             
+            # Gera PDF
             col_widths = [8*mm, 10*mm, 60*mm, 50*mm, 25*mm, 25*mm, 30*mm, 35*mm, 44*mm]
             t = Table(data_tabela, colWidths=col_widths, repeatRows=1)
             t.setStyle(TableStyle(tbl_style))
             elements.append(t)
             doc.build(elements)
             
-            if os.name == 'nt': os.startfile(output_file)
-            return True, "PDF Gerado com Sucesso!"
+            if os.name == 'nt':
+                os.startfile(output_file)
+            return True, f"PDF salvo em:\n{output_file}"
+            
         except Exception as e:
             return False, str(e)
 
-# --- INTERFACE GRÁFICA ---
+
+# =============================================================================
+# CAMADA DE APRESENTAÇÃO (UI - INTERFACE GRÁFICA)
+# =============================================================================
 class SistemaUnipApp(ctk.CTk):
+    
     def __init__(self, is_child=False):
         super().__init__()
-        self.is_child = is_child
+        Utils.garantir_pastas_existem()
         
+        self.is_child = is_child
         self.title(TITULO_JANELA)
         self.geometry(TAMANHO_JANELA)
         
+        # Configuração do Grid Principal
         self.grid_rowconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=0) 
         self.grid_columnconfigure(0, weight=1)
 
+        # Inicializa Serviços
         self.db = BancoDeDados()
         self.bedel_service = BedelService(self.db)
         self.pdf_service = RelatorioService(self.db)
 
+        # Variáveis de Estado
         self.linha_selecionada = 1 
         self.botoes_linhas = {} 
 
+        # Configura Evento de Fechamento
         if not self.is_child:
             self.protocol("WM_DELETE_WINDOW", self._on_close_app)
             self.after(200, self._verificar_novo_dia)
         else:
             self.protocol("WM_DELETE_WINDOW", self.destroy)
 
+        # Constrói a Interface
         self._criar_tabs()
-        self._criar_rodape() 
+        self._criar_rodape()
+        self._setup_botao_tema()
 
     def _on_close_app(self):
         self.destroy()
         sys.exit()
 
     def _verificar_novo_dia(self):
+        """Verifica se é um novo dia e sugere limpar o banco."""
         hoje = datetime.now().strftime("%d/%m/%Y")
         ultimo_uso = self.db.obter_config('data_ultimo_uso')
+        
         if ultimo_uso != hoje:
             self.db.salvar_config('data_ultimo_uso', hoje)
-            if ultimo_uso and messagebox.askyesno("Novo Dia", f"Último uso: {ultimo_uso}.\nLimpar reservas anteriores?"):
+            if ultimo_uso and messagebox.askyesno("Novo Dia Detectado", f"Último uso foi em: {ultimo_uso}.\nDeseja limpar as reservas anteriores?"):
                 self.db.limpar_todas_reservas()
-                messagebox.showinfo("Limpeza", "Reservas limpas.")
+                messagebox.showinfo("Limpeza Concluída", "O sistema está pronto para um novo dia.")
                 self._limpar_form_reserva()
                 self._atualizar_botoes_ocupados()
 
+    # --- LÓGICA DO TEMA (DARK/LIGHT) ---
+    def _setup_botao_tema(self):
+        """Cria o botão de alternar tema no canto inferior direito."""
+        self.btn_tema = ctk.CTkButton(
+            self.frm_rodape, 
+            text="DARK",
+            fg_color=COR_BTN_DARK, 
+            hover_color="#4A148C",
+            text_color="white",
+            width=60, 
+            height=22,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            command=self._alternar_tema
+        )
+        self.btn_tema.pack(side="right")
+
+    def _alternar_tema(self):
+        modo_atual = ctk.get_appearance_mode()
+        
+        if modo_atual == "Dark":
+            ctk.set_appearance_mode("Light")
+            self.btn_tema.configure(
+                text="LIGHT",
+                fg_color=COR_BTN_LIGHT,
+                text_color="black",
+                hover_color="#FBC02D"
+            )
+            self._atualizar_cores_tabelas(modo="Light")
+        else:
+            ctk.set_appearance_mode("Dark")
+            self.btn_tema.configure(
+                text="DARK",
+                fg_color=COR_BTN_DARK,
+                text_color="white",
+                hover_color="#4A148C"
+            )
+            self._atualizar_cores_tabelas(modo="Dark")
+    
+    def _atualizar_cores_tabelas(self, modo):
+        """Ajusta as cores do Treeview manualmente, pois ele não é nativo do ctk."""
+        s = ttk.Style()
+        if modo == "Light":
+            bg_fundo = "#F0F0F0"
+            bg_header = "#E0E0E0"
+            fg_texto = "black"
+            border_color = "#CCCCCC"
+        else:
+            bg_fundo = "#2b2b2b"
+            bg_header = "#333333"
+            fg_texto = "white"
+            border_color = "#555555"
+
+        s.configure("Treeview", background=bg_fundo, foreground=fg_texto, fieldbackground=bg_fundo)
+        s.configure("Treeview.Heading", background=bg_header, foreground=fg_texto, bordercolor=border_color)
+        
+        # Atualiza cor de fundo dos frames que contém as tabelas
+        try:
+            for widget in self.tab_equipe.winfo_children():
+                if isinstance(widget, ctk.CTkFrame) and getattr(widget, "_border_width", 0) == 2:
+                    widget.configure(fg_color=bg_fundo, border_color=border_color)
+            for widget in self.tab_salas.winfo_children():
+                if isinstance(widget, ctk.CTkFrame) and getattr(widget, "_border_width", 0) == 2:
+                    widget.configure(fg_color=bg_fundo, border_color=border_color)
+        except: pass
+
+    # --- RODAPÉ ---
+    def _criar_rodape(self):
+        # Frame container para alinhar Texto e Botão
+        self.frm_rodape = ctk.CTkFrame(self, height=30, fg_color="transparent")
+        self.frm_rodape.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 5))
+        
+        # O botão do tema é adicionado depois em _setup_botao_tema (pack side=right)
+
+        # Texto Centralizado
+        lbl_rodape = ctk.CTkLabel(
+            self.frm_rodape, 
+            text="Created by DevMaycon", 
+            font=ctk.CTkFont(size=11), 
+            text_color="gray50"
+        )
+        lbl_rodape.place(relx=0.5, rely=0.5, anchor="center")
+
+    # --- ABAS ---
     def _criar_tabs(self):
         self.tabview = ctk.CTkTabview(self, width=780)
         self.tabview.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
@@ -491,6 +727,7 @@ class SistemaUnipApp(ctk.CTk):
         self.tab_salas = self.tabview.add("Salas") 
         self.tab_equipe = self.tabview.add("Equipe")
         
+        # Configuração dos Grids das Abas
         self.tab_reserva.grid_columnconfigure(0, weight=3)
         self.tab_reserva.grid_columnconfigure(1, weight=1)
         self.tab_reserva.grid_rowconfigure(0, weight=1)
@@ -501,11 +738,551 @@ class SistemaUnipApp(ctk.CTk):
         self.tab_salas.grid_columnconfigure(0, weight=1)
         self.tab_salas.grid_rowconfigure(1, weight=1)
 
+        # Inicializa o conteúdo de cada aba
         self._setup_aba_reserva()
         self._setup_aba_salas() 
         self._setup_aba_equipe()
 
-    # --- SISTEMA DE FEEDBACK (MANTIDO) ---
+    # =========================================================================
+    # LÓGICA DA ABA RESERVAS
+    # =========================================================================
+    def _setup_aba_reserva(self):
+        # --- Lado Esquerdo (Formulário) ---
+        self.frm_esq = ctk.CTkFrame(self.tab_reserva, border_width=1, border_color="#555555")
+        self.frm_esq.grid(row=0, column=0, sticky="nsew", padx=10, pady=5)
+        self.frm_esq.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(self.frm_esq, text="NOVA RESERVA", font=ctk.CTkFont(size=14, weight="bold"), text_color="#AAAAAA").pack(pady=10)
+
+        # Linha Turno/Horário
+        frm_turno_row = ctk.CTkFrame(self.frm_esq, fg_color="transparent")
+        frm_turno_row.pack(fill="x", padx=15, pady=5)
+        
+        self.cmb_turno = ctk.CTkComboBox(
+            frm_turno_row, 
+            values=["Diurno", "Noturno"], 
+            width=120, 
+            command=self._ao_mudar_turno_reserva
+        )
+        self.cmb_turno.pack(side="left", padx=(0, 10))
+        self.cmb_turno.set("Turno") 
+        self.cmb_turno.configure(text_color=COR_PLACEHOLDER)
+
+        self.var_horario = tk.StringVar(value="1")
+        ctk.CTkRadioButton(frm_turno_row, text="1º Horário", variable=self.var_horario, value="1", command=self._atualizar_botoes_ocupados).pack(side="left", padx=5)
+        ctk.CTkRadioButton(frm_turno_row, text="2º Horário", variable=self.var_horario, value="2", command=self._atualizar_botoes_ocupados).pack(side="left", padx=5)
+
+        # Grid de Botões (1-20)
+        frm_botoes = ctk.CTkFrame(self.frm_esq, fg_color="transparent")
+        frm_botoes.pack(fill="x", padx=15, pady=5)
+        
+        for i in range(10): 
+            frm_botoes.grid_columnconfigure(i, weight=1)
+
+        for i in range(1, 21):
+            btn = ctk.CTkButton(
+                frm_botoes, 
+                text=str(i), 
+                width=30, height=24, 
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color=COR_NEUTRO, 
+                command=lambda linha=i: self._selecionar_linha_botao(linha)
+            )
+            row_btn = 0 if i <= 10 else 1
+            col_btn = (i - 1) if i <= 10 else (i - 11)
+            btn.grid(row=row_btn, column=col_btn, padx=2, pady=2, sticky="ew")
+            self.botoes_linhas[i] = btn
+
+        # Campos de Entrada
+        self.widgets_reserva = {}
+        
+        self.ent_prof = ctk.CTkEntry(self.frm_esq, placeholder_text="Professor", height=30)
+        self.ent_prof.pack(fill="x", padx=15, pady=5)
+        self.widgets_reserva['prof'] = self.ent_prof
+
+        self.cmb_curso = ctk.CTkComboBox(self.frm_esq, values=[], height=30, command=self._wrapper_curso)
+        self.cmb_curso.set("Curso/Semestre")
+        self.cmb_curso.configure(text_color=COR_PLACEHOLDER)
+        self.cmb_curso.pack(fill="x", padx=15, pady=5)
+        self.widgets_reserva['curso'] = self.cmb_curso
+
+        self.ent_bloco = ctk.CTkEntry(self.frm_esq, placeholder_text="Bloco/Sala", height=30)
+        self.ent_bloco.pack(fill="x", padx=15, pady=5)
+        self.widgets_reserva['bloco'] = self.ent_bloco
+
+        self.cmb_hreal = ctk.CTkComboBox(self.frm_esq, values=[], height=30, command=self._ao_mudar_hreal_reserva)
+        self.cmb_hreal.set("Horário")
+        self.cmb_hreal.configure(text_color=COR_PLACEHOLDER)
+        self.cmb_hreal.pack(fill="x", padx=15, pady=5)
+        self.widgets_reserva['hreal'] = self.cmb_hreal
+
+        self.ent_bedel = ctk.CTkEntry(self.frm_esq, placeholder_text="Bedel", height=30)
+        self.ent_bedel.pack(fill="x", padx=15, pady=5)
+        self.widgets_reserva['resp'] = self.ent_bedel
+
+        self.ent_audit = ctk.CTkEntry(self.frm_esq, placeholder_text="Resp. Auditório", height=30)
+        self.ent_audit.pack(fill="x", padx=15, pady=5)
+        self.widgets_reserva['audit'] = self.ent_audit
+
+        ctk.CTkButton(self.frm_esq, text="SALVAR RESERVA", width=200, fg_color=COR_SUCESSO, height=35, font=ctk.CTkFont(size=13, weight="bold"), command=self._salvar_reserva).pack(pady=20)
+
+        # --- Lado Direito (Relatório e Feedback) ---
+        self.frm_dir = ctk.CTkFrame(self.tab_reserva, border_width=1, border_color="#555555")
+        self.frm_dir.grid(row=0, column=1, sticky="nsew", padx=10, pady=5)
+        self.frm_dir.grid_columnconfigure(0, weight=1)
+        
+        ctk.CTkLabel(self.frm_dir, text="RELATÓRIO PDF", font=ctk.CTkFont(size=13, weight="bold"), text_color="#AAAAAA").pack(pady=(15, 10))
+        
+        self.ent_data = ctk.CTkEntry(self.frm_dir, placeholder_text="Dia", height=28)
+        self.ent_data.insert(0, datetime.now().strftime("%d/%m/%Y"))
+        self.ent_data.pack(fill="x", padx=15, pady=5)
+        
+        self.ent_mes = ctk.CTkEntry(self.frm_dir, placeholder_text="Mês", height=28)
+        self.ent_mes.insert(0, datetime.now().strftime("%B").upper())
+        self.ent_mes.pack(fill="x", padx=15, pady=5)
+        
+        self.ent_ano = ctk.CTkEntry(self.frm_dir, placeholder_text="Ano", height=28)
+        self.ent_ano.insert(0, datetime.now().strftime("%Y"))
+        self.ent_ano.pack(fill="x", padx=15, pady=5)
+        
+        ctk.CTkButton(self.frm_dir, text="GERAR PDF", fg_color=COR_PDF, height=35, command=self._gerar_pdf).pack(fill="x", padx=15, pady=20)
+        
+        ctk.CTkButton(self.frm_dir, text="Feedback", width=100, height=25, fg_color="#555", command=self._clique_feedback).pack(side="bottom", pady=(5, 20)) 
+        
+        self.lbl_logo = ctk.CTkLabel(self.frm_dir, text="")
+        self.lbl_logo.pack(side="bottom", pady=(20, 5))
+        self._carregar_imagem_logo()
+        
+        # Estado inicial
+        self._atualizar_combo_cursos(None)
+        self._selecionar_linha_botao(1)
+
+    def _ao_mudar_turno_reserva(self, choice):
+        self.cmb_turno.configure(text_color=COR_PLACEHOLDER if choice == "Turno" else COR_TEXTO_PADRAO)
+        self._ao_mudar_turno_ou_horario(None)
+
+    def _wrapper_curso(self, choice):
+        self.cmb_curso.configure(text_color=COR_PLACEHOLDER if choice == "Curso/Semestre" else COR_TEXTO_PADRAO)
+        self._autocompletar_local(choice)
+
+    def _ao_mudar_hreal_reserva(self, choice):
+        self.cmb_hreal.configure(text_color=COR_PLACEHOLDER if choice == "Horário" else COR_TEXTO_PADRAO)
+
+    def _ao_mudar_turno_ou_horario(self, event=None):
+        self._atualizar_combo_cursos(event)
+        self._atualizar_botoes_ocupados()
+
+    def _carregar_imagem_logo(self):
+        path = Utils.obter_caminho_recurso("logo.png")
+        if os.path.exists(path):
+            try:
+                p_img = PILImage.open(path)
+                r = 145 / p_img.width
+                self.logo_image = ctk.CTkImage(light_image=p_img, dark_image=p_img, size=(145, int(p_img.height * r)))
+                self.lbl_logo.configure(image=self.logo_image)
+            except:
+                self.lbl_logo.configure(text="[Logo]")
+
+    def _atualizar_combo_cursos(self, event):
+        turno = self.cmb_turno.get()
+        todos = self.db.listar_salas()
+        filtrados = []
+        for c, _, t in todos:
+            t_up = t.upper() if t else ""
+            if (turno == "Diurno" and any(x in t_up for x in ["MANHÃ", "DIURNO"])) or \
+               (turno == "Noturno" and any(x in t_up for x in ["NOITE", "NOTURNO"])) or \
+               not t:
+                filtrados.append(c)
+        v_h = ["08:25 - 11:15"] if turno == "Diurno" else ["17:55 - 20:25", "17:55 - 22:00", "19:10 - 20:25", "19:10 - 22:00", "20:25 - 22:00"]
+        self.widgets_reserva['curso'].configure(values=sorted(list(set(filtrados))))
+        self.widgets_reserva['hreal'].configure(values=v_h)
+        self.widgets_reserva['curso'].set("Curso/Semestre")
+        self.widgets_reserva['hreal'].set("Horário")
+        self.widgets_reserva['curso'].configure(text_color=COR_PLACEHOLDER)
+        self.widgets_reserva['hreal'].configure(text_color=COR_PLACEHOLDER)
+
+    def _autocompletar_local(self, choice):
+        l = self.db.buscar_local_sala(choice)
+        if l:
+            self.widgets_reserva['bloco'].delete(0, tk.END)
+            self.widgets_reserva['bloco'].insert(0, l)
+
+    def _selecionar_linha_botao(self, n):
+        self.linha_selecionada = n
+        self._atualizar_botoes_ocupados()
+
+    def _atualizar_botoes_ocupados(self):
+        t = self.cmb_turno.get()
+        if not t or t == "Turno": return 
+        p_id = f"M{self.var_horario.get()}" if t == "Diurno" else self.var_horario.get()
+        ocup = [r[0] for r in self.db.listar_linhas_ocupadas(p_id)]
+        for i in range(1, 21):
+            btn = self.botoes_linhas[i]
+            if i == self.linha_selecionada:
+                btn.configure(fg_color=COR_DESTAQUE, text=str(i))
+            elif i in ocup:
+                btn.configure(fg_color=COR_SUCESSO, text="✓") 
+            else:
+                btn.configure(fg_color=COR_NEUTRO, text=str(i))
+
+    def _salvar_reserva(self):
+        try:
+            num = self.linha_selecionada
+            turno = self.cmb_turno.get()
+            
+            if not turno or turno == "Turno":
+                messagebox.showwarning("Aviso", "Selecione um Turno.")
+                return
+                
+            periodo_id = f"M{self.var_horario.get()}" if turno == "Diurno" else self.var_horario.get()
+            
+            # Verifica Conflito
+            conflito = self.db.buscar_conflito_reserva(num, periodo_id)
+            if conflito and not messagebox.askyesno("Conflito", f"Linha {num} ocupada por {conflito}. Substituir?"):
+                return
+                
+            prof = self.widgets_reserva['prof'].get()
+            bloco = self.widgets_reserva['bloco'].get()
+            resp = self.widgets_reserva['resp'].get()
+            
+            # Bedel Inteligente
+            if not resp.strip():
+                resp = self.bedel_service.escolher_responsavel_inteligente(bloco)
+            
+            curso = "" if self.widgets_reserva['curso'].get() == "Curso/Semestre" else self.widgets_reserva['curso'].get()
+            horario_real = "" if self.widgets_reserva['hreal'].get() == "Horário" else self.widgets_reserva['hreal'].get()
+            
+            if not all([prof, curso, bloco, horario_real]):
+                messagebox.showwarning("Erro", "Preencha Professor, Curso, Bloco e Horário.")
+                return
+            
+            # Salva
+            self.db.salvar_reserva((num, periodo_id, prof, curso, bloco, horario_real, resp, self.widgets_reserva['audit'].get()))
+            
+            # Lógica de extensão automática
+            if self.var_horario.get() == "1" and messagebox.askyesno("Extender", "Deseja reservar também para o 2º Horário?"):
+                self.var_horario.set("2")
+                self._atualizar_botoes_ocupados()
+                return
+                
+            self._limpar_form_reserva()
+            self._atualizar_botoes_ocupados()
+            
+            # Avança seleção para próxima linha
+            if self.linha_selecionada < 20:
+                self._selecionar_linha_botao(self.linha_selecionada + 1)
+                self.var_horario.set("1") 
+                
+        except Exception as e:
+            messagebox.showerror("Erro", str(e))
+
+    def _limpar_form_reserva(self):
+        self.widgets_reserva['prof'].delete(0, tk.END)
+        for k in ['curso', 'hreal']:
+            self.widgets_reserva[k].set("Curso/Semestre" if k == 'curso' else "Horário")
+            self.widgets_reserva[k].configure(text_color=COR_PLACEHOLDER)
+        for k in ['bloco', 'resp', 'audit']:
+            self.widgets_reserva[k].delete(0, tk.END)
+
+    def _gerar_pdf(self):
+        ok, msg = self.pdf_service.gerar_pdf(self.ent_data.get(), self.ent_mes.get(), self.ent_ano.get())
+        if ok: messagebox.showinfo("PDF", msg)
+        else: messagebox.showerror("Erro", msg)
+
+    # =========================================================================
+    # LÓGICA DA ABA EQUIPE
+    # =========================================================================
+    def _setup_aba_equipe(self):
+        # Filtros
+        top = ctk.CTkFrame(self.tab_equipe, fg_color="transparent")
+        top.grid(row=0, column=0, sticky="ew", padx=0, pady=(0, 10))
+        
+        self.ent_eq_nome = ctk.CTkEntry(top, placeholder_text="Nome", width=150)
+        self.ent_eq_nome.pack(side="left", padx=(0, 5))
+        
+        self.cmb_eq_esp = ctk.CTkComboBox(
+            top, 
+            values=["GERAL", "AUDITÓRIO", "LÍDER"], 
+            width=120, 
+            command=self._ao_mudar_especialidade
+        )
+        self.cmb_eq_esp.pack(side="left", padx=5)
+        self.cmb_eq_esp.set("Especialidade")
+        self.cmb_eq_esp.configure(text_color=COR_PLACEHOLDER)
+        
+        ctk.CTkButton(top, text="🔍", width=40, command=self._filtrar_equipe).pack(side="right")
+        self.ent_eq_busca = ctk.CTkEntry(top, placeholder_text="Pesquisar...")
+        self.ent_eq_busca.pack(side="right", padx=5)
+
+        self._configurar_estilo_treeview()
+
+        # Tabela (Container Arredondado)
+        frm_container_tabela = ctk.CTkFrame(self.tab_equipe, fg_color="#2b2b2b", border_width=2, border_color="#555555", corner_radius=10)
+        frm_container_tabela.grid(row=1, column=0, sticky="nsew", padx=0, pady=5)
+        frm_container_tabela.grid_columnconfigure(0, weight=1)
+        frm_container_tabela.grid_rowconfigure(0, weight=1)
+
+        cols = ("Nome", "Carga", "Status", "Especialidade")
+        self.tree_eq = ttk.Treeview(frm_container_tabela, columns=cols, show="headings", height=15)
+        
+        for c in cols:
+            self.tree_eq.heading(c, text=c, command=lambda _c=c: self._treeview_sort_column(self.tree_eq, _c, False))
+
+        self.tree_eq.column("Nome", width=250, anchor="center")
+        self.tree_eq.column("Carga", width=80, anchor="center")
+        self.tree_eq.column("Status", width=120, anchor="center")
+        self.tree_eq.column("Especialidade", width=150, anchor="center")
+
+        self.tree_eq.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        self.tree_eq.bind("<Double-1>", self._ao_editar_celula_equipe)
+
+        # Botões Rodapé
+        bot = ctk.CTkFrame(self.tab_equipe, fg_color="transparent")
+        bot.grid(row=2, column=0, pady=10)
+        ctk.CTkButton(bot, text="SALVAR", width=100, fg_color=COR_SUCESSO, command=self._add_equipe).pack(side="left", padx=10)
+        ctk.CTkButton(bot, text="Alternar Presença", fg_color=COR_ALERTA, command=self._toggle_equipe).pack(side="left", padx=10)
+        ctk.CTkButton(bot, text="Remover Selecionado", fg_color=COR_ERRO, command=self._del_equipe).pack(side="left", padx=10)
+        
+        self._filtrar_equipe()
+
+    def _ao_editar_celula_equipe(self, event):
+        region = self.tree_eq.identify("region", event.x, event.y)
+        if region != "cell": return
+        
+        col_id = self.tree_eq.identify_column(event.x)
+        row_id = self.tree_eq.identify_row(event.y)
+        if not row_id: return
+        
+        col_num = int(col_id.replace("#", "")) - 1
+        col_nome = ["Nome", "Carga", "Status", "Especialidade"][col_num]
+        
+        if col_nome not in ["Nome", "Especialidade"]: return
+        
+        valores_atuais = self.tree_eq.item(row_id, "values")
+        valor_atual = valores_atuais[col_num]
+        x, y, w, h = self.tree_eq.bbox(row_id, col_id)
+
+        def salvar_edicao(event=None):
+            novo_valor = widget_edicao.get()
+            nome_chave = valores_atuais[0] 
+            sucesso = self.db.atualizar_campo_equipe(nome_chave, novo_valor, col_nome)
+            
+            if sucesso:
+                novos_valores = list(valores_atuais)
+                novos_valores[col_num] = novo_valor.upper() if col_nome == "Nome" else novo_valor
+                self.tree_eq.item(row_id, values=novos_valores)
+            else:
+                messagebox.showerror("Erro", "Erro ao atualizar (Nome duplicado?).")
+            widget_edicao.destroy()
+
+        if col_nome == "Especialidade":
+            widget_edicao = ttk.Combobox(self.tree_eq, values=["GERAL", "AUDITÓRIO", "LÍDER"])
+            widget_edicao.set(valor_atual)
+        else:
+            widget_edicao = tk.Entry(self.tree_eq)
+            widget_edicao.insert(0, valor_atual)
+            widget_edicao.select_range(0, tk.END)
+
+        widget_edicao.place(x=x, y=y, width=w, height=h)
+        widget_edicao.focus_set()
+        widget_edicao.bind("<Return>", salvar_edicao)
+        widget_edicao.bind("<FocusOut>", lambda e: widget_edicao.destroy())
+
+    def _ao_mudar_especialidade(self, c):
+        self.cmb_eq_esp.configure(text_color=COR_PLACEHOLDER if c == "Especialidade" else COR_TEXTO_PADRAO)
+
+    def _configurar_estilo_treeview(self):
+        s = ttk.Style()
+        s.theme_use("clam")
+        
+        COR_FUNDO_ESCURO = "#2b2b2b"
+        COR_CABECALHO = "#333333"
+        COR_TEXTO = "white"
+        
+        s.configure("Treeview", background=COR_FUNDO_ESCURO, foreground=COR_TEXTO, fieldbackground=COR_FUNDO_ESCURO, rowheight=30, borderwidth=0)
+        s.configure("Treeview.Heading", background=COR_CABECALHO, foreground=COR_TEXTO, relief="flat", borderwidth=0)
+        s.map("Treeview", background=[('selected', '#1f6aa5')])
+        s.map("Treeview.Heading", background=[('active', '#404040')])
+
+    def _filtrar_equipe(self):
+        for i in self.tree_eq.get_children():
+            self.tree_eq.delete(i)
+        t = self.ent_eq_busca.get().upper()
+        for n, c, d, e in self.db.listar_equipe():
+            if t in n.upper():
+                self.tree_eq.insert("", "end", values=(n, c, "DISPONÍVEL" if d==1 else "AUSENTE", e))
+
+    def _add_equipe(self):
+        n, e = self.ent_eq_nome.get().strip(), self.cmb_eq_esp.get()
+        if e == "Especialidade": e = ""
+        
+        if n and e and self.db.adicionar_membro(n, e):
+            self._filtrar_equipe()
+            self.ent_eq_nome.delete(0, tk.END)
+            self.cmb_eq_esp.set("Especialidade")
+            self.cmb_eq_esp.configure(text_color=COR_PLACEHOLDER)
+        else:
+            messagebox.showwarning("Erro", "Nome e Especialidade são obrigatórios.")
+    
+    def _toggle_equipe(self):
+        sel = self.tree_eq.selection()
+        if sel:
+            i = self.tree_eq.item(sel[0])['values']
+            self.db.alternar_disponibilidade(i[0], i[2])
+            self._filtrar_equipe()
+
+    def _del_equipe(self):
+        sel = self.tree_eq.selection()
+        if sel and messagebox.askyesno("Confirmar", "Remover membro da equipe?"):
+            self.db.remover_membro(self.tree_eq.item(sel[0])['values'][0])
+            self._filtrar_equipe()
+
+    # =========================================================================
+    # LÓGICA DA ABA SALAS
+    # =========================================================================
+    def _setup_aba_salas(self):
+        # Filtros
+        top = ctk.CTkFrame(self.tab_salas, fg_color="transparent")
+        top.grid(row=0, column=0, sticky="ew", padx=0, pady=(0, 10))
+        
+        self.ent_sala_curso = ctk.CTkEntry(top, placeholder_text="Curso / Semestre", width=230)
+        self.ent_sala_curso.pack(side="left", padx=(0, 5))
+        
+        self.cmb_sala_turno = ctk.CTkComboBox(
+            top, 
+            values=["MANHÃ", "NOITE"], 
+            width=100, 
+            state="readonly", 
+            command=lambda c: self.cmb_sala_turno.configure(text_color=COR_PLACEHOLDER if c == "Turno" else COR_TEXTO_PADRAO)
+        )
+        self.cmb_sala_turno.pack(side="left", padx=5)
+        self.cmb_sala_turno.set("Turno")
+        self.cmb_sala_turno.configure(text_color=COR_PLACEHOLDER)
+        
+        self.ent_sala_local = ctk.CTkEntry(top, placeholder_text="Localização", width=150)
+        self.ent_sala_local.pack(side="left", padx=5)
+        
+        ctk.CTkButton(top, text="🔍", width=40, command=self._filtrar_salas).pack(side="right", padx=5)
+        self.ent_sala_busca = ctk.CTkEntry(top, placeholder_text="Pesquisar...")
+        self.ent_sala_busca.pack(side="right", padx=5)
+
+        self._configurar_estilo_treeview()
+
+        # Tabela
+        frm_container_salas = ctk.CTkFrame(self.tab_salas, fg_color="#2b2b2b", border_width=2, border_color="#555555", corner_radius=10)
+        frm_container_salas.grid(row=1, column=0, sticky="nsew", padx=0, pady=5)
+        frm_container_salas.grid_columnconfigure(0, weight=1)
+        frm_container_salas.grid_rowconfigure(0, weight=1)
+
+        self.tree_salas = ttk.Treeview(frm_container_salas, columns=("Curso", "Turno", "Local"), show="headings", height=15)
+        
+        for c in ("Curso", "Turno", "Local"):
+            lbl = "Curso / Semestre" if c == "Curso" else "Localização" if c == "Local" else c
+            self.tree_salas.heading(c, text=lbl, command=lambda _c=c: self._treeview_sort_column(self.tree_salas, _c, False))
+        
+        self.tree_salas.column("Curso", width=300)
+        self.tree_salas.column("Turno", width=100, anchor="center")
+        self.tree_salas.column("Local", width=200)
+        
+        self.tree_salas.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        self.tree_salas.bind("<<TreeviewSelect>>", self._on_select_sala)
+        self.tree_salas.bind("<Double-1>", self._ao_editar_celula_sala)
+
+        # Botões Rodapé
+        bot = ctk.CTkFrame(self.tab_salas, fg_color="transparent")
+        bot.grid(row=2, column=0, pady=10)
+        ctk.CTkButton(bot, text="SALVAR", fg_color=COR_SUCESSO, command=self._salvar_sala).pack(side="left", padx=10)
+        ctk.CTkButton(bot, text="Remover Sala", fg_color=COR_ERRO, command=self._del_sala).pack(side="left", padx=10)
+        
+        self._filtrar_salas()
+
+    def _ao_editar_celula_sala(self, event):
+        region = self.tree_salas.identify("region", event.x, event.y)
+        if region != "cell": return
+        
+        col_id = self.tree_salas.identify_column(event.x)
+        row_id = self.tree_salas.identify_row(event.y)
+        if not row_id: return
+        
+        col_num = int(col_id.replace("#", "")) - 1
+        col_nome = ["Curso", "Turno", "Local"][col_num]
+        
+        valores_atuais = self.tree_salas.item(row_id, "values")
+        valor_atual = valores_atuais[col_num]
+        x, y, w, h = self.tree_salas.bbox(row_id, col_id)
+
+        def salvar_edicao(event=None):
+            novo_valor = widget_edicao.get()
+            curso_chave = valores_atuais[0] 
+            sucesso = self.db.atualizar_campo_sala(curso_chave, novo_valor, col_nome)
+            
+            if sucesso:
+                novos_valores = list(valores_atuais)
+                # Mantém UPPERCASE para curso e local
+                novos_valores[col_num] = novo_valor.upper() if col_nome != "Curso" else novo_valor 
+                self.tree_salas.item(row_id, values=novos_valores)
+            else:
+                messagebox.showerror("Erro", "Erro ao atualizar.")
+            widget_edicao.destroy()
+
+        if col_nome == "Turno":
+            widget_edicao = ttk.Combobox(self.tree_salas, values=["MANHÃ", "NOITE"])
+            widget_edicao.set(valor_atual)
+        else:
+            widget_edicao = tk.Entry(self.tree_salas)
+            widget_edicao.insert(0, valor_atual)
+            widget_edicao.select_range(0, tk.END)
+
+        widget_edicao.place(x=x, y=y, width=w, height=h)
+        widget_edicao.focus_set()
+        widget_edicao.bind("<Return>", salvar_edicao)
+        widget_edicao.bind("<FocusOut>", lambda e: widget_edicao.destroy())
+
+    def _filtrar_salas(self):
+        for i in self.tree_salas.get_children():
+            self.tree_salas.delete(i)
+        t = self.ent_sala_busca.get().upper()
+        for c, l, tn in self.db.listar_salas():
+            if t in c.upper() or t in l.upper():
+                self.tree_salas.insert("", "end", values=(c, tn if tn else "-", l))
+    
+    def _salvar_sala(self):
+        curso = self.ent_sala_curso.get()
+        turno = self.cmb_sala_turno.get()
+        local = self.ent_sala_local.get()
+        
+        turno = "" if turno == "Turno" else turno
+        
+        if curso and local:
+            self.db.salvar_sala(curso, local, turno)
+            self._filtrar_salas()
+            self.ent_sala_curso.delete(0, tk.END)
+            self.ent_sala_local.delete(0, tk.END)
+            self._atualizar_combo_cursos(None)
+        else:
+            messagebox.showwarning("Erro", "Preencha Curso e Localização.")
+    
+    def _del_sala(self):
+        sel = self.tree_salas.selection()
+        if sel:
+            self.db.remover_sala(self.tree_salas.item(sel[0])['values'][0])
+            self._filtrar_salas()
+            self._atualizar_combo_cursos(None)
+
+    def _on_select_sala(self, event):
+        sel = self.tree_salas.selection()
+        if sel:
+            item = self.tree_salas.item(sel[0])['values']
+            self.ent_sala_curso.delete(0, tk.END)
+            self.ent_sala_curso.insert(0, item[0])
+            self.cmb_sala_turno.set(item[1])
+            self.cmb_sala_turno.configure(text_color=COR_TEXTO_PADRAO)
+            self.ent_sala_local.delete(0, tk.END)
+            self.ent_sala_local.insert(0, item[2])
+
+    # =========================================================================
+    # SISTEMA DE FEEDBACK
+    # =========================================================================
     def _clique_feedback(self):
         self.janela_feedback = ctk.CTkToplevel(self)
         self.janela_feedback.title("Enviar Feedback")
@@ -523,7 +1300,12 @@ class SistemaUnipApp(ctk.CTk):
         self.botoes_estrelas = []
         self.nota_atual = 5 
         for i in range(1, 6):
-            btn = ctk.CTkButton(frm_stars, text="★", width=40, height=40, fg_color="transparent", hover_color="#333", font=ctk.CTkFont(size=30), text_color=COR_ESTRELA_ATIVA, command=lambda nota=i: self._atualizar_estrelas(nota))
+            btn = ctk.CTkButton(
+                frm_stars, text="★", width=40, height=40, 
+                fg_color="transparent", hover_color="#333", 
+                font=ctk.CTkFont(size=30), text_color=COR_ESTRELA_ATIVA, 
+                command=lambda nota=i: self._atualizar_estrelas(nota)
+            )
             btn.pack(side="left", padx=2)
             self.botoes_estrelas.append(btn)
         
@@ -535,9 +1317,12 @@ class SistemaUnipApp(ctk.CTk):
         self.feedback_placeholder_ativo = True
         
         ctk.CTkLabel(self.janela_feedback, text="Suas informações (Opcional):", font=ctk.CTkFont(size=12, weight="bold")).pack(pady=(15, 5))
-        self.ent_fb_nome = ctk.CTkEntry(self.janela_feedback, placeholder_text="Seu Nome", width=320); self.ent_fb_nome.pack(pady=5)
-        self.ent_fb_email = ctk.CTkEntry(self.janela_feedback, placeholder_text="Seu melhor Email", width=320); self.ent_fb_email.pack(pady=5)
-        ctk.CTkButton(self.janela_feedback, text="ENVIAR FEEDBACK", fg_color=COR_SALVAR, width=200, command=self._enviar_feedback).pack(pady=30)
+        self.ent_fb_nome = ctk.CTkEntry(self.janela_feedback, placeholder_text="Seu Nome", width=320)
+        self.ent_fb_nome.pack(pady=5)
+        self.ent_fb_email = ctk.CTkEntry(self.janela_feedback, placeholder_text="Seu melhor Email", width=320)
+        self.ent_fb_email.pack(pady=5)
+        
+        ctk.CTkButton(self.janela_feedback, text="ENVIAR FEEDBACK", fg_color=COR_SUCESSO, width=200, command=self._enviar_feedback).pack(pady=30)
 
     def _atualizar_estrelas(self, nota):
         self.nota_atual = nota
@@ -547,419 +1332,45 @@ class SistemaUnipApp(ctk.CTk):
 
     def _foco_entrada_texto(self, event):
         if self.feedback_placeholder_ativo:
-            self.txt_feedback.delete("1.0", "end"); self.txt_feedback.configure(text_color=COR_TEXTO_PADRAO); self.feedback_placeholder_ativo = False
+            self.txt_feedback.delete("1.0", "end")
+            self.txt_feedback.configure(text_color=COR_TEXTO_PADRAO)
+            self.feedback_placeholder_ativo = False
 
     def _foco_saida_texto(self, event):
         texto = self.txt_feedback.get("1.0", "end-1c").strip()
         if not texto:
-            self.txt_feedback.configure(text_color="gray"); self.txt_feedback.insert("1.0", "Comentários, sugestões ou bugs..."); self.feedback_placeholder_ativo = True
+            self.txt_feedback.configure(text_color="gray")
+            self.txt_feedback.insert("1.0", "Comentários, sugestões ou bugs...")
+            self.feedback_placeholder_ativo = True
 
     def _enviar_feedback(self):
         texto = "" if self.feedback_placeholder_ativo else self.txt_feedback.get("1.0", "end-1c").strip()
-        if not texto: messagebox.showwarning("Aviso", "Por favor, escreva algum comentário."); return
+        if not texto:
+            messagebox.showwarning("Aviso", "Por favor, escreva algum comentário.")
+            return
+        
         try:
             self.db.salvar_feedback(self.nota_atual, texto, self.ent_fb_nome.get().strip(), self.ent_fb_email.get().strip())
-            messagebox.showinfo("Sucesso", "Feedback enviado!"); self.janela_feedback.destroy()
-        except Exception as e: messagebox.showerror("Erro", f"Erro: {e}")
+            messagebox.showinfo("Sucesso", "Feedback enviado e salvo na pasta 'Feedbacks'!")
+            self.janela_feedback.destroy()
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro: {e}")
 
-    def _criar_rodape(self):
-        lbl_rodape = ctk.CTkLabel(self, text="Created by DevMaycon", font=ctk.CTkFont(size=11), text_color="gray50")
-        lbl_rodape.grid(row=1, column=0, sticky="ew", pady=(0, 5)) 
-
+    # --- UTILITÁRIOS DA UI ---
     def _treeview_sort_column(self, tv, col, reverse):
+        """Função genérica para ordenar colunas do Treeview."""
         l = [(tv.set(k, col), k) for k in tv.get_children('')]
-        try: l.sort(key=lambda t: int(t[0]), reverse=reverse)
-        except ValueError: l.sort(key=lambda t: t[0].lower(), reverse=reverse)
-        for index, (val, k) in enumerate(l): tv.move(k, '', index)
+        try:
+            l.sort(key=lambda t: int(t[0]), reverse=reverse)
+        except ValueError:
+            l.sort(key=lambda t: t[0].lower(), reverse=reverse)
+            
+        for index, (val, k) in enumerate(l):
+            tv.move(k, '', index)
+            
         tv.heading(col, command=lambda: self._treeview_sort_column(tv, col, not reverse))
 
-    # === ABA RESERVA (MANTIDA IGUAL) ===
-    def _setup_aba_reserva(self):
-        self.frm_esq = ctk.CTkFrame(self.tab_reserva, border_width=1, border_color="#555555")
-        self.frm_esq.grid(row=0, column=0, sticky="nsew", padx=10, pady=5)
-        self.frm_esq.grid_columnconfigure(1, weight=1)
-
-        ctk.CTkLabel(self.frm_esq, text="NOVA RESERVA", font=ctk.CTkFont(size=14, weight="bold"), text_color="#AAAAAA").pack(pady=10)
-
-        frm_turno_row = ctk.CTkFrame(self.frm_esq, fg_color="transparent")
-        frm_turno_row.pack(fill="x", padx=15, pady=5)
-        self.cmb_turno = ctk.CTkComboBox(frm_turno_row, values=["Diurno", "Noturno"], width=120, command=self._ao_mudar_turno_reserva)
-        self.cmb_turno.pack(side="left", padx=(0, 10)); self.cmb_turno.set("Turno"); self.cmb_turno.configure(text_color=COR_PLACEHOLDER)
-        self.var_horario = tk.StringVar(value="1")
-        ctk.CTkRadioButton(frm_turno_row, text="1º Horário", variable=self.var_horario, value="1", command=self._atualizar_botoes_ocupados).pack(side="left", padx=5)
-        ctk.CTkRadioButton(frm_turno_row, text="2º Horário", variable=self.var_horario, value="2", command=self._atualizar_botoes_ocupados).pack(side="left", padx=5)
-
-        frm_botoes = ctk.CTkFrame(self.frm_esq, fg_color="transparent")
-        frm_botoes.pack(fill="x", padx=15, pady=5)
-        for i in range(10): frm_botoes.grid_columnconfigure(i, weight=1)
-        for i in range(1, 21):
-            btn = ctk.CTkButton(frm_botoes, text=str(i), width=30, height=24, font=ctk.CTkFont(size=11, weight="bold"), fg_color=COR_NEUTRO, command=lambda linha=i: self._selecionar_linha_botao(linha))
-            row_btn = 0 if i <= 10 else 1; col_btn = (i - 1) if i <= 10 else (i - 11)
-            btn.grid(row=row_btn, column=col_btn, padx=2, pady=2, sticky="ew")
-            self.botoes_linhas[i] = btn
-
-        self.widgets_reserva = {}
-        self.ent_prof = ctk.CTkEntry(self.frm_esq, placeholder_text="Professor", height=30); self.ent_prof.pack(fill="x", padx=15, pady=5); self.widgets_reserva['prof'] = self.ent_prof
-        self.cmb_curso = ctk.CTkComboBox(self.frm_esq, values=[], height=30, command=self._wrapper_curso)
-        self.cmb_curso.set("Curso/Semestre"); self.cmb_curso.configure(text_color=COR_PLACEHOLDER); self.cmb_curso.pack(fill="x", padx=15, pady=5); self.widgets_reserva['curso'] = self.cmb_curso
-        self.ent_bloco = ctk.CTkEntry(self.frm_esq, placeholder_text="Bloco/Sala", height=30); self.ent_bloco.pack(fill="x", padx=15, pady=5); self.widgets_reserva['bloco'] = self.ent_bloco
-        self.cmb_hreal = ctk.CTkComboBox(self.frm_esq, values=[], height=30, command=self._ao_mudar_hreal_reserva)
-        self.cmb_hreal.set("Horário"); self.cmb_hreal.configure(text_color=COR_PLACEHOLDER); self.cmb_hreal.pack(fill="x", padx=15, pady=5); self.widgets_reserva['hreal'] = self.cmb_hreal
-        self.ent_bedel = ctk.CTkEntry(self.frm_esq, placeholder_text="Bedel", height=30); self.ent_bedel.pack(fill="x", padx=15, pady=5); self.widgets_reserva['resp'] = self.ent_bedel
-        self.ent_audit = ctk.CTkEntry(self.frm_esq, placeholder_text="Resp. Auditório", height=30); self.ent_audit.pack(fill="x", padx=15, pady=5); self.widgets_reserva['audit'] = self.ent_audit
-        ctk.CTkButton(self.frm_esq, text="SALVAR RESERVA", width=200, fg_color=COR_SALVAR, height=35, font=ctk.CTkFont(size=13, weight="bold"), command=self._salvar_reserva).pack(pady=20)
-
-        self.frm_dir = ctk.CTkFrame(self.tab_reserva, border_width=1, border_color="#555555")
-        self.frm_dir.grid(row=0, column=1, sticky="nsew", padx=10, pady=5); self.frm_dir.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(self.frm_dir, text="RELATÓRIO PDF", font=ctk.CTkFont(size=13, weight="bold"), text_color="#AAAAAA").pack(pady=(15, 10))
-        self.ent_data = ctk.CTkEntry(self.frm_dir, placeholder_text="Dia", height=28); self.ent_data.insert(0, datetime.now().strftime("%d/%m/%Y")); self.ent_data.pack(fill="x", padx=15, pady=5)
-        self.ent_mes = ctk.CTkEntry(self.frm_dir, placeholder_text="Mês", height=28); self.ent_mes.insert(0, datetime.now().strftime("%B").upper()); self.ent_mes.pack(fill="x", padx=15, pady=5)
-        self.ent_ano = ctk.CTkEntry(self.frm_dir, placeholder_text="Ano", height=28); self.ent_ano.insert(0, datetime.now().strftime("%Y")); self.ent_ano.pack(fill="x", padx=15, pady=5)
-        ctk.CTkButton(self.frm_dir, text="GERAR PDF", fg_color=COR_PDF, height=35, command=self._gerar_pdf).pack(fill="x", padx=15, pady=20)
-        ctk.CTkButton(self.frm_dir, text="Feedback", width=100, height=25, fg_color="#555", command=self._clique_feedback).pack(side="bottom", pady=(5, 20)) 
-        self.lbl_logo = ctk.CTkLabel(self.frm_dir, text=""); self.lbl_logo.pack(side="bottom", pady=(20, 5)) 
-        self._carregar_imagem_logo(); self._atualizar_combo_cursos(None); self._selecionar_linha_botao(1)
-
-    def _ao_mudar_turno_reserva(self, choice):
-        self.cmb_turno.configure(text_color=COR_PLACEHOLDER if choice == "Turno" else COR_TEXTO_PADRAO); self._ao_mudar_turno_ou_horario(None)
-
-    def _wrapper_curso(self, choice):
-        self.cmb_curso.configure(text_color=COR_PLACEHOLDER if choice == "Curso/Semestre" else COR_TEXTO_PADRAO); self._autocompletar_local(choice)
-
-    def _ao_mudar_hreal_reserva(self, choice):
-        self.cmb_hreal.configure(text_color=COR_PLACEHOLDER if choice == "Horário" else COR_TEXTO_PADRAO)
-
-    def _ao_mudar_turno_ou_horario(self, event=None):
-        self._atualizar_combo_cursos(event); self._atualizar_botoes_ocupados()
-
-    def _carregar_imagem_logo(self):
-        path = Utils.obter_caminho_recurso("logo.png")
-        if os.path.exists(path):
-            try:
-                p_img = PILImage.open(path); r = 145 / p_img.width 
-                self.logo_image = ctk.CTkImage(light_image=p_img, dark_image=p_img, size=(145, int(p_img.height * r)))
-                self.lbl_logo.configure(image=self.logo_image)
-            except: self.lbl_logo.configure(text="[Logo]")
-
-    def _atualizar_combo_cursos(self, event):
-        turno = self.cmb_turno.get(); todos = self.db.listar_salas(); filtrados = []
-        for c, _, t in todos:
-            t_up = t.upper() if t else ""
-            if (turno == "Diurno" and any(x in t_up for x in ["MANHÃ", "DIURNO"])) or (turno == "Noturno" and any(x in t_up for x in ["NOITE", "NOTURNO"])) or not t: filtrados.append(c)
-        v_h = ["08:25 - 11:15"] if turno == "Diurno" else ["17:55 - 20:25", "17:55 - 22:00", "19:10 - 20:25", "19:10 - 22:00", "20:25 - 22:00"]
-        self.widgets_reserva['curso'].configure(values=sorted(list(set(filtrados)))); self.widgets_reserva['hreal'].configure(values=v_h)
-        self.widgets_reserva['curso'].set("Curso/Semestre"); self.widgets_reserva['hreal'].set("Horário")
-        self.widgets_reserva['curso'].configure(text_color=COR_PLACEHOLDER); self.widgets_reserva['hreal'].configure(text_color=COR_PLACEHOLDER)
-
-    def _autocompletar_local(self, choice):
-        l = self.db.buscar_local_sala(choice)
-        if l: self.widgets_reserva['bloco'].delete(0, tk.END); self.widgets_reserva['bloco'].insert(0, l)
-
-    def _selecionar_linha_botao(self, n): self.linha_selecionada = n; self._atualizar_botoes_ocupados()
-
-    def _atualizar_botoes_ocupados(self):
-        t = self.cmb_turno.get()
-        if not t or t == "Turno": return 
-        p_id = f"M{self.var_horario.get()}" if t == "Diurno" else self.var_horario.get()
-        ocup = [r[0] for r in self.db.listar_linhas_ocupadas(p_id)]
-        for i in range(1, 21):
-            btn = self.botoes_linhas[i]
-            if i == self.linha_selecionada: btn.configure(fg_color=COR_SELECIONADO, text=str(i))
-            elif i in ocup: btn.configure(fg_color=COR_SALVAR, text="✓") 
-            else: btn.configure(fg_color=COR_NEUTRO, text=str(i))
-
-    def _salvar_reserva(self):
-        try:
-            num, t = self.linha_selecionada, self.cmb_turno.get()
-            if not t or t == "Turno": messagebox.showwarning("Aviso", "Selecione um Turno."); return
-            p_id = f"M{self.var_horario.get()}" if t == "Diurno" else self.var_horario.get()
-            conf = self.db.buscar_conflito_reserva(num, p_id)
-            if conf and not messagebox.askyesno("Conflito", f"Linha {num} ocupada por {conf}. Substituir?"): return
-            p, b = self.widgets_reserva['prof'].get(), self.widgets_reserva['bloco'].get()
-            resp = self.widgets_reserva['resp'].get()
-            if not resp.strip(): resp = self.bedel_service.escolher_responsavel_inteligente(b)
-            c = "" if self.widgets_reserva['curso'].get() == "Curso/Semestre" else self.widgets_reserva['curso'].get()
-            h = "" if self.widgets_reserva['hreal'].get() == "Horário" else self.widgets_reserva['hreal'].get()
-            if not all([p, c, b, h]): messagebox.showwarning("Erro", "Preencha Professor, Curso, Bloco e Horário."); return
-            self.db.salvar_reserva((num, p_id, p, c, b, h, resp, self.widgets_reserva['audit'].get()))
-            if self.var_horario.get() == "1" and messagebox.askyesno("Extender", "Deseja reservar também para o 2º Horário?"):
-                self.var_horario.set("2"); self._atualizar_botoes_ocupados(); return
-            self._limpar_form_reserva(); self._atualizar_botoes_ocupados()
-            if self.linha_selecionada < 20: self._selecionar_linha_botao(self.linha_selecionada + 1); self.var_horario.set("1") 
-        except Exception as e: messagebox.showerror("Erro", str(e))
-
-    def _limpar_form_reserva(self):
-        self.widgets_reserva['prof'].delete(0, tk.END)
-        for k in ['curso', 'hreal']: self.widgets_reserva[k].set("Curso/Semestre" if k == 'curso' else "Horário"); self.widgets_reserva[k].configure(text_color=COR_PLACEHOLDER)
-        for k in ['bloco', 'resp', 'audit']: self.widgets_reserva[k].delete(0, tk.END)
-
-    def _gerar_pdf(self):
-        ok, msg = self.pdf_service.gerar_pdf(self.ent_data.get(), self.ent_mes.get(), self.ent_ano.get())
-        if ok: messagebox.showinfo("PDF", msg)
-        else: messagebox.showerror("Erro", msg)
-
-    # === ABA EQUIPE (COM EDIÇÃO) ===
-    def _setup_aba_equipe(self):
-        # Parte superior (Filtros e botões) - Mantida igual
-        top = ctk.CTkFrame(self.tab_equipe, fg_color="transparent")
-        top.grid(row=0, column=0, sticky="ew", padx=0, pady=(0, 10))
-        
-        self.ent_eq_nome = ctk.CTkEntry(top, placeholder_text="Nome", width=150); self.ent_eq_nome.pack(side="left", padx=(0, 5))
-        self.cmb_eq_esp = ctk.CTkComboBox(top, values=["GERAL", "AUDITÓRIO", "LÍDER"], width=120, command=self._ao_mudar_especialidade); self.cmb_eq_esp.pack(side="left", padx=5)
-        self.cmb_eq_esp.set("Especialidade"); self.cmb_eq_esp.configure(text_color=COR_PLACEHOLDER)
-        
-        ctk.CTkButton(top, text="🔍", width=40, command=self._filtrar_equipe).pack(side="right")
-        self.ent_eq_busca = ctk.CTkEntry(top, placeholder_text="Pesquisar..."); self.ent_eq_busca.pack(side="right", padx=5)
-
-        # Configura o estilo
-        self._configurar_estilo_treeview()
-
-        # Frame Container com Borda Arredondada
-        frm_container_tabela = ctk.CTkFrame(self.tab_equipe, fg_color="#2b2b2b", border_width=2, border_color="#555555", corner_radius=10)
-        frm_container_tabela.grid(row=1, column=0, sticky="nsew", padx=0, pady=5)
-        frm_container_tabela.grid_columnconfigure(0, weight=1)
-        frm_container_tabela.grid_rowconfigure(0, weight=1)
-
-        # Tabela
-        cols = ("Nome", "Carga", "Status", "Especialidade")
-        self.tree_eq = ttk.Treeview(frm_container_tabela, columns=cols, show="headings", height=15)
-
-        for c in cols:
-            self.tree_eq.heading(c, text=c, command=lambda _c=c: self._treeview_sort_column(self.tree_eq, _c, False))
-
-        self.tree_eq.column("Nome", width=250, anchor="center")
-        self.tree_eq.column("Carga", width=80, anchor="center")
-        self.tree_eq.column("Status", width=120, anchor="center")
-        self.tree_eq.column("Especialidade", width=150, anchor="center")
-
-        self.tree_eq.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        
-        # --- BIND DE EDIÇÃO (CLIQUE DUPLO) ---
-        self.tree_eq.bind("<Double-1>", self._ao_editar_celula_equipe)
-
-        # Botões do rodapé
-        bot = ctk.CTkFrame(self.tab_equipe, fg_color="transparent"); bot.grid(row=2, column=0, pady=10)
-        ctk.CTkButton(bot, text="SALVAR", width=100, fg_color=COR_SALVAR, command=self._add_equipe).pack(side="left", padx=10)
-        ctk.CTkButton(bot, text="ALTERNAR PRESENÇA", fg_color=COR_ALERTA, command=self._toggle_equipe).pack(side="left", padx=10)
-        ctk.CTkButton(bot, text="REMOVER SELECIONADO", fg_color=COR_PERIGO, command=self._del_equipe).pack(side="left", padx=10)
-        
-        self._filtrar_equipe()
-
-    def _ao_editar_celula_equipe(self, event):
-        """Lógica para editar célula da equipe"""
-        region = self.tree_eq.identify("region", event.x, event.y)
-        if region != "cell": return
-
-        # Identifica coluna e item
-        col_id = self.tree_eq.identify_column(event.x) # Ex: #1, #2
-        row_id = self.tree_eq.identify_row(event.y)    # ID do item (I001)
-        if not row_id: return
-
-        col_num = int(col_id.replace("#", "")) - 1 # 0-indexado
-        col_nome = ["Nome", "Carga", "Status", "Especialidade"][col_num]
-        
-        # Só permite editar Nome e Especialidade
-        if col_nome not in ["Nome", "Especialidade"]: return
-
-        # Pega valor atual
-        valores_atuais = self.tree_eq.item(row_id, "values")
-        valor_atual = valores_atuais[col_num]
-        
-        # Pega coordenadas da célula para desenhar o widget em cima
-        x, y, w, h = self.tree_eq.bbox(row_id, col_id)
-
-        # Função para salvar
-        def salvar_edicao(event=None):
-            novo_valor = widget_edicao.get()
-            nome_chave = valores_atuais[0] # O nome é a chave primária
-            
-            # Atualiza no banco
-            sucesso = self.db.atualizar_campo_equipe(nome_chave, novo_valor, col_nome)
-            
-            if sucesso:
-                # Atualiza Treeview visualmente
-                novos_valores = list(valores_atuais)
-                novos_valores[col_num] = novo_valor.upper() if col_nome == "Nome" else novo_valor
-                self.tree_eq.item(row_id, values=novos_valores)
-            else:
-                messagebox.showerror("Erro", "Não foi possível atualizar (Nome duplicado?).")
-            
-            widget_edicao.destroy()
-
-        # Cria widget apropriado
-        if col_nome == "Especialidade":
-            widget_edicao = ttk.Combobox(self.tree_eq, values=["GERAL", "AUDITÓRIO", "LÍDER"])
-            widget_edicao.set(valor_atual)
-        else:
-            widget_edicao = tk.Entry(self.tree_eq)
-            widget_edicao.insert(0, valor_atual)
-            widget_edicao.select_range(0, tk.END)
-
-        # Posiciona e foca
-        widget_edicao.place(x=x, y=y, width=w, height=h)
-        widget_edicao.focus_set()
-        
-        # Binds para salvar ou cancelar
-        widget_edicao.bind("<Return>", salvar_edicao)
-        widget_edicao.bind("<FocusOut>", lambda e: widget_edicao.destroy())
-
-    def _ao_mudar_especialidade(self, c): self.cmb_eq_esp.configure(text_color=COR_PLACEHOLDER if c == "Especialidade" else COR_TEXTO_PADRAO)
-
-    def _configurar_estilo_treeview(self):
-        s = ttk.Style()
-        s.theme_use("clam")
-        COR_FUNDO_ESCURO = "#2b2b2b"
-        COR_CABECALHO = "#333333"
-        COR_TEXTO = "white"
-        s.configure("Treeview", background=COR_FUNDO_ESCURO, foreground=COR_TEXTO, fieldbackground=COR_FUNDO_ESCURO, rowheight=30, borderwidth=0)
-        s.configure("Treeview.Heading", background=COR_CABECALHO, foreground=COR_TEXTO, relief="flat", borderwidth=0)
-        s.map("Treeview", background=[('selected', '#1f6aa5')])
-        s.map("Treeview.Heading", background=[('active', '#404040')])
-
-    def _filtrar_equipe(self):
-        for i in self.tree_eq.get_children(): self.tree_eq.delete(i)
-        t = self.ent_eq_busca.get().upper()
-        for n, c, d, e in self.db.listar_equipe():
-            if t in n.upper(): self.tree_eq.insert("", "end", values=(n, c, "DISPONÍVEL" if d==1 else "AUSENTE", e))
-
-    def _add_equipe(self):
-        n, e = self.ent_eq_nome.get().strip(), self.cmb_eq_esp.get()
-        if e == "Especialidade": e = ""
-        if n and e and self.db.adicionar_membro(n, e): self._filtrar_equipe(); self.ent_eq_nome.delete(0, tk.END); self.cmb_eq_esp.set("Especialidade"); self.cmb_eq_esp.configure(text_color=COR_PLACEHOLDER)
-        else: messagebox.showwarning("Erro", "Inválido.")
-
-    def _toggle_equipe(self):
-        sel = self.tree_eq.selection()
-        if sel: i = self.tree_eq.item(sel[0])['values']; self.db.alternar_disponibilidade(i[0], i[2]); self._filtrar_equipe()
-
-    def _del_equipe(self):
-        sel = self.tree_eq.selection()
-        if sel and messagebox.askyesno("Confirmar", "Remover?"): self.db.remover_membro(self.tree_eq.item(sel[0])['values'][0]); self._filtrar_equipe()
-
-    # === ABA SALAS (COM EDIÇÃO) ===
-    def _setup_aba_salas(self):
-        top = ctk.CTkFrame(self.tab_salas, fg_color="transparent")
-        top.grid(row=0, column=0, sticky="ew", padx=0, pady=(0, 10))
-        
-        # 1. Ajuste no Placeholder de Curso para "Curso / Semestre" (Igual ao cabeçalho)
-        self.ent_sala_curso = ctk.CTkEntry(top, placeholder_text="Curso / Semestre", width=230)
-        self.ent_sala_curso.pack(side="left", padx=(0, 5))
-        
-        # 2. Ajuste no ComboBox para 'readonly' (Evita cursor de texto piscando)
-        self.cmb_sala_turno = ctk.CTkComboBox(
-            top, 
-            values=["MANHÃ", "NOITE"], 
-            width=100, 
-            state="readonly", # <--- Impede digitação, apenas seleção
-            command=lambda c: self.cmb_sala_turno.configure(text_color=COR_PLACEHOLDER if c == "Turno" else COR_TEXTO_PADRAO)
-        )
-        self.cmb_sala_turno.pack(side="left", padx=5)
-        self.cmb_sala_turno.set("Turno")
-        self.cmb_sala_turno.configure(text_color=COR_PLACEHOLDER)
-        
-        # 3. Ajuste no Placeholder de Local para "Localização" (Igual ao cabeçalho)
-        self.ent_sala_local = ctk.CTkEntry(top, placeholder_text="Localização", width=150)
-        self.ent_sala_local.pack(side="left", padx=5)
-        
-        # 4. Botão de Lupa (Mantido)
-        ctk.CTkButton(top, text="🔍", width=40, command=self._filtrar_salas).pack(side="right", padx=5)
-        
-        # 5. Ajuste no Placeholder de Busca para "Pesquisar..." (Padronizado com a aba Equipe)
-        self.ent_sala_busca = ctk.CTkEntry(top, placeholder_text="Pesquisar...")
-        self.ent_sala_busca.pack(side="right", padx=5)
-
-        self._configurar_estilo_treeview()
-
-        # --- Frame Container Arredondado (Mantido) ---
-        frm_container_salas = ctk.CTkFrame(self.tab_salas, fg_color="#2b2b2b", border_width=2, border_color="#555555", corner_radius=10)
-        frm_container_salas.grid(row=1, column=0, sticky="nsew", padx=0, pady=5)
-        frm_container_salas.grid_columnconfigure(0, weight=1); frm_container_salas.grid_rowconfigure(0, weight=1)
-
-        self.tree_salas = ttk.Treeview(frm_container_salas, columns=("Curso", "Turno", "Local"), show="headings", height=15)
-        for c in ("Curso", "Turno", "Local"):
-            lbl = "Curso / Semestre" if c == "Curso" else "Localização" if c == "Local" else c
-            self.tree_salas.heading(c, text=lbl, command=lambda _c=c: self._treeview_sort_column(self.tree_salas, _c, False))
-        
-        self.tree_salas.column("Curso", width=300)
-        self.tree_salas.column("Turno", width=100, anchor="center")
-        self.tree_salas.column("Local", width=200)
-        
-        self.tree_salas.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        self.tree_salas.bind("<<TreeviewSelect>>", self._on_select_sala)
-        self.tree_salas.bind("<Double-1>", self._ao_editar_celula_sala)
-
-        bot = ctk.CTkFrame(self.tab_salas, fg_color="transparent"); bot.grid(row=2, column=0, pady=10)
-        ctk.CTkButton(bot, text="SALVAR", fg_color=COR_SALVAR, command=self._salvar_sala).pack(side="left", padx=10)
-        ctk.CTkButton(bot, text="REMOVER SALA", fg_color=COR_PERIGO, command=self._del_sala).pack(side="left", padx=10)
-        
-        self._filtrar_salas()
-
-    def _ao_editar_celula_sala(self, event):
-        """Lógica para editar célula da sala"""
-        region = self.tree_salas.identify("region", event.x, event.y)
-        if region != "cell": return
-
-        col_id = self.tree_salas.identify_column(event.x)
-        row_id = self.tree_salas.identify_row(event.y)
-        if not row_id: return
-
-        col_num = int(col_id.replace("#", "")) - 1
-        col_nome = ["Curso", "Turno", "Local"][col_num]
-        
-        valores_atuais = self.tree_salas.item(row_id, "values")
-        valor_atual = valores_atuais[col_num]
-        
-        x, y, w, h = self.tree_salas.bbox(row_id, col_id)
-
-        def salvar_edicao(event=None):
-            novo_valor = widget_edicao.get()
-            curso_chave = valores_atuais[0] 
-            
-            sucesso = self.db.atualizar_campo_sala(curso_chave, novo_valor, col_nome)
-            
-            if sucesso:
-                novos_valores = list(valores_atuais)
-                novos_valores[col_num] = novo_valor.upper() if col_nome != "Curso" else novo_valor # Mantem formatação
-                self.tree_salas.item(row_id, values=novos_valores)
-            else:
-                messagebox.showerror("Erro", "Erro ao atualizar.")
-            
-            widget_edicao.destroy()
-
-        if col_nome == "Turno":
-            widget_edicao = ttk.Combobox(self.tree_salas, values=["MANHÃ", "NOITE"])
-            widget_edicao.set(valor_atual)
-        else:
-            widget_edicao = tk.Entry(self.tree_salas)
-            widget_edicao.insert(0, valor_atual)
-            widget_edicao.select_range(0, tk.END)
-
-        widget_edicao.place(x=x, y=y, width=w, height=h)
-        widget_edicao.focus_set()
-        widget_edicao.bind("<Return>", salvar_edicao)
-        widget_edicao.bind("<FocusOut>", lambda e: widget_edicao.destroy())
-
-    def _filtrar_salas(self):
-        for i in self.tree_salas.get_children(): self.tree_salas.delete(i)
-        t = self.ent_sala_busca.get().upper()
-        for c, l, tn in self.db.listar_salas():
-            if t in c.upper() or t in l.upper(): self.tree_salas.insert("", "end", values=(c, tn if tn else "-", l))
-
-    def _salvar_sala(self):
-        c, tn, l = self.ent_sala_curso.get(), self.cmb_sala_turno.get(), self.ent_sala_local.get()
-        tn = "" if tn == "Turno" else tn
-        if c and l: self.db.salvar_sala(c, l, tn); self._filtrar_salas(); self.ent_sala_curso.delete(0, tk.END); self.ent_sala_local.delete(0, tk.END); self._atualizar_combo_cursos(None)
-        else: messagebox.showwarning("Erro", "Preencha dados.")
-
-    def _del_sala(self):
-        sel = self.tree_salas.selection()
-        if sel: self.db.remover_sala(self.tree_salas.item(sel[0])['values'][0]); self._filtrar_salas(); self._atualizar_combo_cursos(None)
-
-    def _on_select_sala(self, event):
-        sel = self.tree_salas.selection()
-        if sel:
-            i = self.tree_salas.item(sel[0])['values']; self.ent_sala_curso.delete(0, tk.END); self.ent_sala_curso.insert(0, i[0])
-            self.cmb_sala_turno.set(i[1]); self.cmb_sala_turno.configure(text_color=COR_TEXTO_PADRAO); self.ent_sala_local.delete(0, tk.END); self.ent_sala_local.insert(0, i[2])
 
 if __name__ == "__main__":
-    SistemaUnipApp().mainloop()
+    app = SistemaUnipApp()
+    app.mainloop()
