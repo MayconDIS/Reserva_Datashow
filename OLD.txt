@@ -1,6 +1,6 @@
 """
 SISTEMA UNIP - GESTÃO CENTRALIZADA
-Versão: 10.1 (Clean Code + Layout Fix)
+Versão: 10.4 (Fix Logo Path)
 Autor: Refatorado por IA (Gemini)
 """
 
@@ -28,8 +28,8 @@ except ImportError as e:
 
 # --- CONSTANTES E CONFIGURAÇÕES ---
 DB_NOME = 'unip_sistema_v10_clean.db'
-TAMANHO_JANELA = "700x600"
-TITULO_JANELA = "Sistema UNIP - Gestão Centralizada (v10.1 Layout Fix)"
+TAMANHO_JANELA = "750x650"
+TITULO_JANELA = "Sistema UNIP - Gestão Centralizada (v10.4)"
 
 # Paleta de Cores
 COR_PRIMARIA = "#4CAF50"    # Verde
@@ -46,30 +46,16 @@ EQUIPE_PADRAO = [
 ]
 
 SALAS_PADRAO = [
-    ("ADS 2º/3º A (Manhã)", "H - 2º - Sala 02"),
-    ("CIÊN. COMP 2º/3º A (Manhã)", "H - 2º - Sala 04"),
-    ("DIREITO 1º A (Manhã)", "F - 1º - Sala 04"),
-    ("DIREITO 2º/3º A (Manhã)", "F - 1º - Sala 05"),
-    ("DIREITO 4º/5º A (Manhã)", "F - 1º - Sala 03"),
-    ("DIREITO 6º/7º A (Manhã)", "F - 1º - Sala 02"),
-    ("DIREITO 8º/9º A (Manhã)", "F - 1º - Sala 01"),
-    ("ESTÉTICA 2º/3º A (Manhã)", "F - Térreo - Sala 06"),
-    ("VETERINÁRIA 2º/3º A (Manhã)", "H - 1º - Sala 02"),
-    ("VETERINÁRIA 4º/5º A (Manhã)", "H - 1º - Sala 03"),
-    ("VETERINÁRIA 6º/7º A (Manhã)", "H - 1º - Sala 04"),
-    ("VETERINÁRIA 8º/9º A (Manhã)", "H - 1º - Sala 05"),
-    ("VETERINÁRIA 10º (Manhã)", "H - 2º - Sala 05"),
-    ("PSICOLOGIA 2º/3º A (Manhã)", "F - Térreo - Sala 02"),
-    ("PSICOLOGIA 4º/5º A (Manhã)", "F - Térreo - Sala 03"),
-    ("PSICOLOGIA 8º/9º A (Manhã)", "F - Térreo - Sala 04"),
-    ("ADS 1º P (Noite)", "F - 1º - Sala 01"),
-    ("ADS 2º P / 3º PQ (Noite)", "F - 1º - Sala 05"),
-    ("ADS 4º PQ (Noite)", "F - 1º - Sala 02"),
-    ("DESIGN GRÁFICO 1º P/4º P (Noite)", "D - 1º - Sala 06"),
-    ("ADM 1º P (Noite)", "B - 2º - Sala 01"),
-    ("DIREITO 1º (Noite)", "E - 1º - Sala 01"),
-    ("ENFERMAGEM 2º/3º (Noite)", "E - 2º - Sala 05"),
-    ("ENG. CIVIL 8º/9º (Noite)", "F - 1º - Sala 4")
+    ("ADS 2º/3º A", "H - 2º - Sala 02", "MANHÃ"),
+    ("CIÊN. COMP 2º/3º A", "H - 2º - Sala 04", "MANHÃ"),
+    ("DIREITO 1º A", "F - 1º - Sala 04", "MANHÃ"),
+    ("DIREITO 2º/3º A", "F - 1º - Sala 05", "MANHÃ"),
+    ("ADS 1º P", "F - 1º - Sala 01", "NOITE"),
+    ("ADS 2º P / 3º PQ", "F - 1º - Sala 05", "NOITE"),
+    ("ADS 4º PQ", "F - 1º - Sala 02", "NOITE"),
+    ("DESIGN GRÁFICO 1º P/4º P", "D - 1º - Sala 06", "NOITE"),
+    ("ADM 1º P", "B - 2º - Sala 01", "NOITE"),
+    ("DIREITO 1º", "E - 1º - Sala 01", "NOITE")
 ]
 
 # Configuração de Localização
@@ -83,11 +69,18 @@ except:
 class Utils:
     @staticmethod
     def obter_caminho_recurso(nome_arquivo):
-        """Retorna o caminho absoluto do arquivo, compatível com PyInstaller."""
-        if getattr(sys, 'frozen', False):
-            base_path = os.path.dirname(sys.executable)
-        else:
-            base_path = os.path.dirname(os.path.abspath(__file__))
+        """ Retorna o caminho absoluto, priorizando a pasta do script """
+        try:
+            # Se for executável PyInstaller
+            base_path = sys._MEIPASS
+        except Exception:
+            try:
+                # Tenta pegar a pasta onde o arquivo .py está
+                base_path = os.path.dirname(os.path.abspath(__file__))
+            except:
+                # Fallback para o diretório de execução atual
+                base_path = os.path.abspath(".")
+        
         return os.path.join(base_path, nome_arquivo)
 
     @staticmethod
@@ -97,7 +90,6 @@ class Utils:
 
     @staticmethod
     def extrair_info_bloco(texto_bloco):
-        """Extrai letra e andar do bloco para cálculo de distância."""
         if not texto_bloco: return "", ""
         texto = texto_bloco.upper()
         letra = ""
@@ -152,18 +144,21 @@ class BancoDeDados:
             )
         """)
         cursor.execute("CREATE TABLE IF NOT EXISTS equipe (nome TEXT PRIMARY KEY, carga_acumulada INTEGER DEFAULT 0, disponivel INTEGER DEFAULT 1, especialidade TEXT DEFAULT 'GERAL')")
-        cursor.execute("CREATE TABLE IF NOT EXISTS salas_turmas (id INTEGER PRIMARY KEY AUTOINCREMENT, curso_semestre TEXT UNIQUE, localizacao TEXT)")
+        cursor.execute("CREATE TABLE IF NOT EXISTS salas_turmas (id INTEGER PRIMARY KEY AUTOINCREMENT, curso_semestre TEXT UNIQUE, localizacao TEXT, turno TEXT)")
         cursor.execute("CREATE TABLE IF NOT EXISTS config (chave TEXT PRIMARY KEY, valor TEXT)")
         
-        # Migrações e Correções Automáticas
+        # --- MIGRAÇÕES ---
         try: cursor.execute("ALTER TABLE reservas ADD COLUMN contabilizada INTEGER DEFAULT 0")
         except: pass
         try: cursor.execute("ALTER TABLE equipe ADD COLUMN especialidade TEXT DEFAULT 'GERAL'")
         except: pass
-        try: cursor.execute("UPDATE equipe SET especialidade = 'AUDITÓRIO' WHERE especialidade = 'AUDITORIO'")
+        
+        try: 
+            cursor.execute("ALTER TABLE salas_turmas ADD COLUMN turno TEXT")
+            cursor.execute("UPDATE salas_turmas SET turno = 'NOITE' WHERE turno IS NULL") 
         except: pass
 
-        # Seed Inicial (se vazio)
+        # Seed Inicial
         cursor.execute("SELECT count(*) FROM equipe")
         if cursor.fetchone()[0] == 0:
             for nome, esp in EQUIPE_PADRAO:
@@ -172,7 +167,7 @@ class BancoDeDados:
         
         cursor.execute("SELECT count(*) FROM salas_turmas")
         if cursor.fetchone()[0] == 0:
-            cursor.executemany("INSERT INTO salas_turmas (curso_semestre, localizacao) VALUES (?, ?)", SALAS_PADRAO)
+            cursor.executemany("INSERT INTO salas_turmas (curso_semestre, localizacao, turno) VALUES (?, ?, ?)", SALAS_PADRAO)
             
         conn.commit()
         conn.close()
@@ -252,13 +247,13 @@ class BancoDeDados:
     # --- MÉTODOS DE SALAS ---
     def listar_salas(self):
         conn = self._conectar()
-        res = conn.execute("SELECT curso_semestre, localizacao FROM salas_turmas ORDER BY curso_semestre ASC").fetchall()
+        res = conn.execute("SELECT curso_semestre, localizacao, turno FROM salas_turmas ORDER BY curso_semestre ASC").fetchall()
         conn.close()
         return res
 
-    def salvar_sala(self, curso, local):
+    def salvar_sala(self, curso, local, turno):
         conn = self._conectar()
-        conn.execute("INSERT OR REPLACE INTO salas_turmas (curso_semestre, localizacao) VALUES (?, ?)", (curso, local))
+        conn.execute("INSERT OR REPLACE INTO salas_turmas (curso_semestre, localizacao, turno) VALUES (?, ?, ?)", (curso, local, turno))
         conn.commit()
         conn.close()
 
@@ -293,25 +288,22 @@ class BedelService:
         self.db = db
 
     def escolher_responsavel_inteligente(self, bloco_alvo):
-        """Algoritmo para escolher o melhor bedel baseado em carga e distância."""
         equipe = self.db.listar_equipe()
-        equipe_disponivel = [m for m in equipe if m[2] == 1] # Index 2 é disponivel
+        equipe_disponivel = [m for m in equipe if m[2] == 1]
         
         if not equipe_disponivel: return "SEM EQUIPE"
 
-        # Carregar contexto do dia
         reservas_hoje = self.db.listar_todas_reservas()
         
-        # Mapear locais atuais de cada bedel
         locais_responsavel = {m[0]: [] for m in equipe_disponivel}
-        carga_atual = {m[0]: m[1] for m in equipe_disponivel} # Index 1 é carga
+        carga_atual = {m[0]: m[1] for m in equipe_disponivel}
 
         for r in reservas_hoje:
-            resp = r[6] # Index 6 é responsável
-            bloco = r[4] # Index 4 é bloco
+            resp = r[6]
+            bloco = r[4]
             if resp in locais_responsavel:
                 locais_responsavel[resp].append(bloco)
-                carga_atual[resp] += 1 # Simula carga do dia corrente
+                carga_atual[resp] += 1 
 
         candidatos = []
         especialistas_auditorio = []
@@ -319,21 +311,17 @@ class BedelService:
         bloco_norm = Utils.remover_acentos(bloco_alvo)
         eh_auditorio = "AUDITORIO" in bloco_norm
 
-        for nome, _, _, esp in equipe_disponivel: # Index 3 é especialidade
+        for nome, _, _, esp in equipe_disponivel:
             if esp == "AUDITÓRIO": especialistas_auditorio.append(nome)
             
             penalidade_dist = Utils.calcular_penalidade_distancia(bloco_alvo, locais_responsavel[nome])
-            # Fórmula: (Carga * 3) + Distancia. Menor score ganha.
             score = (carga_atual[nome] * 3) + penalidade_dist
             candidatos.append((nome, score))
 
-        # Regra de Especialista
         if eh_auditorio and especialistas_auditorio:
-            # Pega o especialista com menor carga
             melhor = sorted(especialistas_auditorio, key=lambda n: carga_atual[n])[0]
             return melhor
 
-        # Ordena por menor score
         candidatos.sort(key=lambda x: x[1])
         return candidatos[0][0]
 
@@ -343,31 +331,26 @@ class RelatorioService:
 
     def gerar_pdf(self, data_cabecalho, mes_referencia, ano_referencia):
         try:
-            # Nome do arquivo
             try: mes_safe = mes_referencia.upper().split()[0]
             except: mes_safe = "MES"
             output_file = Utils.obter_caminho_recurso(f"Reserva_{mes_safe}_{ano_referencia}.pdf")
             
-            logo_path = Utils.obter_caminho_recurso("logo.png")
+            caminho_logo = Utils.obter_caminho_recurso("logo.png")
             
-            # Layout A4 Paisagem com margens ajustadas
             doc = SimpleDocTemplate(output_file, pagesize=landscape(A4), 
                                     rightMargin=5*mm, leftMargin=5*mm, 
                                     topMargin=5*mm, bottomMargin=5*mm)
             elements = []
             
-            # Logo
-            if os.path.exists(logo_path):
-                im = Image(logo_path, width=1.5*inch, height=0.4*inch)
-                im.hAlign = 'CENTER' # Centralizado
+            if os.path.exists(caminho_logo):
+                im = Image(caminho_logo, width=1.5*inch, height=0.4*inch)
+                im.hAlign = 'CENTER' 
                 elements.append(im)
                 elements.append(Spacer(1, 1*mm))
             
-            # Título
             styles = getSampleStyleSheet()
             estilo_titulo = ParagraphStyle('TituloCenter', parent=styles['Normal'], fontSize=12, alignment=1)
             
-            # Busca Auditorio se houver
             reservas = self.db.listar_todas_reservas()
             texto_auditorio = "_______________"
             for r in reservas:
@@ -379,8 +362,6 @@ class RelatorioService:
             elements.append(Paragraph(titulo, estilo_titulo))
             elements.append(Spacer(1, 3*mm))
             
-            # Preparar Dados da Tabela
-            # Agrupar linhas para ordenar
             linhas_dict = {i: [] for i in range(1, 21)}
             for r in reservas:
                 linhas_dict[r[0]].append(r)
@@ -396,7 +377,6 @@ class RelatorioService:
             headers = ['Nº', 'HORA', 'PROFESSOR', 'CURSO', 'BLOCO', 'HORÁRIO', 'SOM/MIC', 'RESPONSÁVEL', 'Montou x Desmontou']
             data_tabela = [headers]
             
-            # Estilo da Tabela Otimizado
             tbl_style = [
                 ('GRID', (0,0), (-1,-1), 0.5, colors.black),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -424,7 +404,6 @@ class RelatorioService:
                             return [item[2], item[3], item[4], item[5], str_som, resp, str_montou]
                     return ["", "", "", "", str_som, "", str_montou]
 
-                # Detecta se é manhã ou noite pelo ID do periodo
                 tem_manha = any(i[1] in ['M1', 'M2'] for i in itens_linha)
                 p1 = 'M1' if tem_manha else '1'
                 p2 = 'M2' if tem_manha else '2'
@@ -437,7 +416,6 @@ class RelatorioService:
                 tbl_style.append(('SPAN', (0, row_idx), (0, row_idx+1)))
                 row_idx += 2
             
-            # Larguras otimizadas para 287mm
             col_widths = [8*mm, 10*mm, 60*mm, 50*mm, 25*mm, 25*mm, 30*mm, 35*mm, 44*mm]
             
             t = Table(data_tabela, colWidths=col_widths, repeatRows=1)
@@ -454,23 +432,33 @@ class RelatorioService:
 
 # --- INTERFACE GRÁFICA (VIEW) ---
 class SistemaUnipGUI:
-    def __init__(self, root):
+    def __init__(self, root, is_child=False):
         self.root = root
+        self.is_child = is_child
         self.root.title(TITULO_JANELA)
         self.root.geometry(TAMANHO_JANELA)
         
-        # Inicializa Dependências
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close_window)
+        
         self.db = BancoDeDados()
         self.bedel_service = BedelService(self.db)
         self.pdf_service = RelatorioService(self.db)
         
-        # Verifica limpeza diária (apenas na janela principal para evitar loops se abrir popups)
-        if isinstance(self.root, tk.Tk):
+        if not self.is_child:
             self.root.after(100, self._verificar_novo_dia)
 
         self._construir_navegacao()
         self._construir_frames()
         self.mostrar_aba("reserva")
+
+    def _on_close_window(self):
+        if self.is_child:
+            self.root.destroy()
+            try: pass 
+            except: pass
+        else:
+            self.root.destroy()
+            sys.exit()
 
     def _verificar_novo_dia(self):
         hoje = datetime.now().strftime("%d/%m/%Y")
@@ -497,15 +485,28 @@ class SistemaUnipGUI:
         self.btn_reserva = tk.Button(frm_center, text="Reservas", command=lambda: self.mostrar_aba("reserva"), **style_btn)
         self.btn_reserva.pack(side="left", padx=5)
         
-        self.btn_equipe = tk.Button(frm_center, text="Equipe", command=lambda: self.mostrar_aba("equipe"), **style_btn)
-        self.btn_equipe.pack(side="left", padx=5)
-        
         self.btn_salas = tk.Button(frm_center, text="Gestão de Salas", command=lambda: self.mostrar_aba("salas"), **style_btn)
         self.btn_salas.pack(side="left", padx=5)
 
+        self.btn_equipe = tk.Button(frm_center, text="Equipe", command=lambda: self.mostrar_aba("equipe"), **style_btn)
+        self.btn_equipe.pack(side="left", padx=5)
+        
     def _abrir_nova_janela(self):
         new_window = tk.Toplevel(self.root)
-        app_copy = SistemaUnipGUI(new_window)
+        
+        def on_main_withdraw():
+            self.root.withdraw()
+            
+        self.root.protocol("WM_DELETE_WINDOW", on_main_withdraw)
+        
+        def on_child_close():
+            new_window.destroy()
+            self.root.deiconify() 
+            self.root.protocol("WM_DELETE_WINDOW", self._on_close_window)
+            
+        new_window.protocol("WM_DELETE_WINDOW", on_child_close)
+        
+        app_copy = SistemaUnipGUI(new_window, is_child=True)
 
     def _construir_frames(self):
         self.container = tk.Frame(self.root)
@@ -529,16 +530,16 @@ class SistemaUnipGUI:
         self._setup_aba_nova_pagina()
 
     def mostrar_aba(self, nome):
-        # Resetar estilos
         estilo_inativo = {"bg": "#e1e1e1", "fg": "black"}
         self.btn_nova_janela.config(**estilo_inativo)
         self.btn_reserva.config(**estilo_inativo)
         self.btn_equipe.config(**estilo_inativo)
         self.btn_salas.config(**estilo_inativo)
         
-        # Ativar
         estilo_ativo = {"bg": COR_PRIMARIA, "fg": "white"}
-        if nome == "reserva": self.btn_reserva.config(**estilo_ativo)
+        if nome == "reserva": 
+            self.btn_reserva.config(**estilo_ativo)
+            self._atualizar_combo_cursos() 
         elif nome == "equipe": self.btn_equipe.config(**estilo_ativo)
         elif nome == "salas": self.btn_salas.config(**estilo_ativo)
         elif nome == "nova_pagina": self.btn_nova_janela.config(**estilo_ativo)
@@ -552,7 +553,6 @@ class SistemaUnipGUI:
         frame.columnconfigure(1, weight=1, uniform="gp")
         frame.rowconfigure(0, weight=1)
         
-        # Painel Esquerdo (Formulário)
         p_esq = tk.LabelFrame(frame, text="Nova Reserva", padx=10, pady=5)
         p_esq.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         p_esq.columnconfigure(0, weight=1)
@@ -573,9 +573,9 @@ class SistemaUnipGUI:
         campos = [
             ("Linha (1-20):", "num", 20),
             ("Professor:", "prof", None),
-            ("Curso/Semestre:", "curso", None), # Combobox
+            ("Curso/Semestre:", "curso", None),
             ("Bloco/Sala:", "bloco", None),
-            ("Horário:", "hreal", None),        # Combobox
+            ("Horário:", "hreal", None),
             ("Bedel Data:", "resp", None),
             ("Bedel Auditório:", "audit", None)
         ]
@@ -604,7 +604,6 @@ class SistemaUnipGUI:
             
         tk.Button(p_esq, text="SALVAR RESERVA", bg=COR_PRIMARIA, fg="white", font=("Arial", 11, "bold"), height=2, command=self._salvar_reserva).grid(row=row, sticky="ew", pady=20)
 
-        # Painel Direito (Relatório)
         p_dir = tk.Frame(frame)
         p_dir.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         p_dir.columnconfigure(0, weight=1)
@@ -629,7 +628,6 @@ class SistemaUnipGUI:
         
         tk.Button(frm_rel, text="GERAR PDF", bg=COR_SECUNDARIA, fg="white", font=("Arial", 10, "bold"), height=2, command=self._gerar_pdf).pack(fill="x", pady=10)
         
-        # Logo
         frm_logo = tk.LabelFrame(p_dir, text="Institucional", padx=10, pady=5)
         frm_logo.pack(fill="both", expand=True, pady=(10, 0))
         
@@ -651,16 +649,29 @@ class SistemaUnipGUI:
 
     def _atualizar_combo_cursos(self, event=None):
         turno = self.cmb_turno.get()
+        if not turno:
+            hora = datetime.now().hour
+            turno = "Noturno" if hora >= 18 else "Diurno"
+            self.cmb_turno.set(turno)
+
         todos = self.db.listar_salas()
         filtrados = []
-        for curso, _ in todos:
-            if not turno: filtrados.append(curso)
-            elif turno == "Diurno" and "MANHÃ" in curso.upper(): filtrados.append(curso)
-            elif turno == "Noturno" and "NOITE" in curso.upper(): filtrados.append(curso)
         
-        self.widgets_reserva['curso']['values'] = filtrados
+        for curso, _, turno_curso in todos:
+            turno_curso_up = turno_curso.upper() if turno_curso else ""
+            
+            if turno == "Diurno":
+                if "MANHÃ" in turno_curso_up or "MANHA" in turno_curso_up or "DIURNO" in turno_curso_up:
+                    filtrados.append(curso)
+            elif turno == "Noturno":
+                if "NOITE" in turno_curso_up or "NOTURNO" in turno_curso_up:
+                    filtrados.append(curso)
+            
+            if not turno_curso: 
+                filtrados.append(curso)
+
+        self.widgets_reserva['curso']['values'] = sorted(list(set(filtrados)))
         
-        # Horários
         vals = ["08:25 - 11:15"] if turno == "Diurno" else ["17:55 - 20:25", "17:55 - 22:00", "19:10 - 20:25", "19:10 - 22:00", "20:25 - 22:00"]
         self.widgets_reserva['hreal']['values'] = vals
 
@@ -680,17 +691,14 @@ class SistemaUnipGUI:
                 messagebox.showwarning("Aviso", "Selecione o Turno")
                 return
             
-            # Periodo ID: M1, M2, 1, 2
             periodo_id = f"M{self.var_horario.get()}" if turno == "Diurno" else self.var_horario.get()
             
-            # Verificação Conflito (Mensagem Limpa)
             prof_ocupante = self.db.buscar_conflito_reserva(num, periodo_id)
             if prof_ocupante:
                 horario_txt = "1º Horário" if "1" in periodo_id else "2º Horário"
                 msg = f"Linha {num} já ocupada no {horario_txt} da {turno.upper()} por {prof_ocupante}."
                 if not messagebox.askyesno("Conflito", f"{msg}\nSubstituir?"): return
 
-            # Bedel Inteligente
             resp = self.widgets_reserva['resp'].get()
             if resp == "Deixe vazio para Auto-Atribuir": resp = ""
             msg_extra = ""
@@ -710,7 +718,7 @@ class SistemaUnipGUI:
                 self.widgets_reserva['audit'].get()
             )
             
-            if not all(dados[2:6]): # Valida campos obrigatórios
+            if not all(dados[2:6]): 
                 messagebox.showwarning("Erro", "Preencha Professor, Curso, Bloco e Horário.")
                 return
 
@@ -738,19 +746,29 @@ class SistemaUnipGUI:
     def _carregar_imagem_logo(self):
         path = Utils.obter_caminho_recurso("logo.png")
         if os.path.exists(path):
-            self.img_original = PILImage.open(path)
+            try:
+                self.img_original = PILImage.open(path)
+            except Exception as e:
+                self.img_original = None
+                self.lbl_logo.config(text=f"Erro ao abrir logo:\n{e}", fg="red")
         else:
             self.img_original = None
+            # Mostra o caminho onde ele tentou buscar, para facilitar o debug
+            self.lbl_logo.config(text=f"Logo não encontrada em:\n{path}", fg="red", wraplength=200)
 
     def _resize_logo(self, event):
         if not self.img_original: return
-        # Mantem proporção
+        # Evita redimensionar se a janela estiver muito pequena (inicialização)
+        if event.width < 10 or event.height < 10: return
+        
         razao = min(event.width/self.img_original.width, event.height/self.img_original.height)
         novo_w = int(self.img_original.width * razao)
         novo_h = int(self.img_original.height * razao)
+        
         if novo_w > 0 and novo_h > 0:
             self.tk_image = ImageTk.PhotoImage(self.img_original.resize((novo_w, novo_h), PILImage.LANCZOS))
             self.lbl_logo.config(image=self.tk_image)
+            self.lbl_logo.text = "" # Limpa texto de erro se a imagem carregar
 
     # === ABA EQUIPE ===
     def _setup_aba_equipe(self):
@@ -758,10 +776,9 @@ class SistemaUnipGUI:
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(1, weight=1)
         
-        # Topo
         top = tk.LabelFrame(frame, text="Gerenciar Membros", padx=10, pady=5)
         top.grid(row=0, sticky="ew", padx=10, pady=5)
-        top.columnconfigure(5, weight=1) # Input de busca expande
+        top.columnconfigure(5, weight=1) 
         
         tk.Label(top, text="Nome:").grid(row=0, column=0, padx=5)
         self.ent_eq_nome = tk.Entry(top, width=15)
@@ -778,35 +795,29 @@ class SistemaUnipGUI:
         
         tk.Button(top, text="Pesquisar", bg=COR_SECUNDARIA, fg="white", command=self._filtrar_equipe).grid(row=0, column=6, padx=5)
         
-        # Lista
         cols = ("Nome", "Carga", "Status", "Especialidade")
         self.tree_eq = ttk.Treeview(frame, columns=cols, show="headings", height=12)
         
-        # --- LARGURAS FIXAS PARA 700PX ---
         larguras = {"Nome": 180, "Carga": 80, "Status": 120, "Especialidade": 150}
-        
         for c in cols:
             self.tree_eq.heading(c, text=c, command=lambda _c=c: self._treeview_sort(self.tree_eq, _c, False))
             self.tree_eq.column(c, width=larguras[c], anchor="center", stretch=True)
             
         self.tree_eq.grid(row=1, sticky="nsew", padx=10, pady=5)
         
-        # Ações
         botoes = tk.Frame(frame, pady=10)
         botoes.grid(row=2)
         tk.Button(botoes, text="Alternar Presença", bg=COR_ALERTA, fg="white", command=self._toggle_equipe).pack(side="left", padx=10)
         tk.Button(botoes, text="REMOVER SELECIONADO", bg=COR_PERIGO, fg="white", command=self._del_equipe).pack(side="left", padx=10)
         
-        self._filtrar_equipe() # Carrega inicial
+        self._filtrar_equipe()
 
     def _treeview_sort(self, tv, col, reverse):
         l = [(tv.set(k, col), k) for k in tv.get_children('')]
         try: l.sort(key=lambda t: int(t[0]), reverse=reverse)
         except: l.sort(key=lambda t: t[0].lower(), reverse=reverse)
-        
         for index, (_, k) in enumerate(l):
             tv.move(k, '', index)
-        
         tv.heading(col, command=lambda: self._treeview_sort(tv, col, not reverse))
 
     def _filtrar_equipe(self):
@@ -857,30 +868,36 @@ class SistemaUnipGUI:
         
         top = tk.LabelFrame(frame, text="Gerenciar Salas", padx=10, pady=5)
         top.grid(row=0, sticky="ew", padx=10, pady=5)
-        top.columnconfigure(5, weight=1)
+        top.columnconfigure(7, weight=1)
         
         tk.Label(top, text="Curso:").grid(row=0, column=0)
         self.ent_sala_curso = tk.Entry(top, width=20)
         self.ent_sala_curso.grid(row=0, column=1, padx=5)
         
-        tk.Label(top, text="Local:").grid(row=0, column=2)
+        # --- REMOVIDA OPÇÃO INTEGRAL DAQUI ---
+        tk.Label(top, text="Turno:").grid(row=0, column=2)
+        self.cmb_sala_turno = ttk.Combobox(top, values=["MANHÃ", "NOITE"], width=10, state="readonly")
+        self.cmb_sala_turno.grid(row=0, column=3, padx=5)
+
+        tk.Label(top, text="Local:").grid(row=0, column=4)
         self.ent_sala_local = tk.Entry(top, width=15)
-        self.ent_sala_local.grid(row=0, column=3, padx=5)
+        self.ent_sala_local.grid(row=0, column=5, padx=5)
         
-        tk.Button(top, text="SALVAR", bg=COR_PRIMARIA, fg="white", command=self._salvar_sala).grid(row=0, column=4, padx=10)
+        tk.Button(top, text="SALVAR", bg=COR_PRIMARIA, fg="white", command=self._salvar_sala).grid(row=0, column=6, padx=10)
         
         self.ent_sala_busca = tk.Entry(top)
-        self.ent_sala_busca.grid(row=0, column=5, sticky="ew", padx=5)
+        self.ent_sala_busca.grid(row=0, column=7, sticky="ew", padx=5)
         
-        tk.Button(top, text="Pesquisar", bg=COR_SECUNDARIA, fg="white", command=self._filtrar_salas).grid(row=0, column=6, padx=5)
+        tk.Button(top, text="Pesquisar", bg=COR_SECUNDARIA, fg="white", command=self._filtrar_salas).grid(row=0, column=8, padx=5)
         
-        self.tree_salas = ttk.Treeview(frame, columns=("Curso", "Local"), show="headings", height=15)
+        self.tree_salas = ttk.Treeview(frame, columns=("Curso", "Turno", "Local"), show="headings", height=15)
         
-        # --- LARGURAS FIXAS PARA SALAS ---
-        self.tree_salas.column("Curso", width=300, stretch=True)
-        self.tree_salas.column("Local", width=200, stretch=True)
+        self.tree_salas.column("Curso", width=250, stretch=True)
+        self.tree_salas.column("Turno", width=100, anchor="center")
+        self.tree_salas.column("Local", width=150, stretch=True)
         
         self.tree_salas.heading("Curso", text="Curso / Semestre", command=lambda: self._treeview_sort(self.tree_salas, "Curso", False))
+        self.tree_salas.heading("Turno", text="Turno", command=lambda: self._treeview_sort(self.tree_salas, "Turno", False))
         self.tree_salas.heading("Local", text="Localização Padrão", command=lambda: self._treeview_sort(self.tree_salas, "Local", False))
         
         self.tree_salas.grid(row=1, sticky="nsew", padx=10, pady=5)
@@ -896,18 +913,22 @@ class SistemaUnipGUI:
         for i in self.tree_salas.get_children(): self.tree_salas.delete(i)
         
         dados = self.db.listar_salas()
-        for c, l in dados:
+        for c, l, t in dados:
+            t_display = t if t else " - "
             if termo in c.upper() or termo in l.upper():
-                self.tree_salas.insert("", "end", values=(c, l))
+                self.tree_salas.insert("", "end", values=(c, t_display, l))
 
     def _salvar_sala(self):
-        c, l = self.ent_sala_curso.get(), self.ent_sala_local.get()
-        if c and l:
-            self.db.salvar_sala(c, l)
+        c, l, t = self.ent_sala_curso.get(), self.ent_sala_local.get(), self.cmb_sala_turno.get()
+        if c and l and t:
+            self.db.salvar_sala(c, l, t)
             self._filtrar_salas()
             self.ent_sala_curso.delete(0, tk.END)
             self.ent_sala_local.delete(0, tk.END)
+            self.cmb_sala_turno.set("")
             messagebox.showinfo("Sucesso", "Sala salva!")
+        else:
+            messagebox.showwarning("Aviso", "Preencha Curso, Turno e Local")
 
     def _del_sala(self):
         sel = self.tree_salas.selection()
@@ -923,10 +944,11 @@ class SistemaUnipGUI:
             item = self.tree_salas.item(sel[0])['values']
             self.ent_sala_curso.delete(0, tk.END)
             self.ent_sala_curso.insert(0, item[0])
+            self.cmb_sala_turno.set(item[1])
             self.ent_sala_local.delete(0, tk.END)
-            self.ent_sala_local.insert(0, item[1])
+            self.ent_sala_local.insert(0, item[2])
 
-    # === NOVA PÁGINA (PLACEHOLDER) ===
+    # === NOVA PÁGINA ===
     def _setup_aba_nova_pagina(self):
         frame = self.frames["nova_pagina"]
         tk.Label(frame, text="Nova Página", font=("Arial", 20)).pack(expand=True)
